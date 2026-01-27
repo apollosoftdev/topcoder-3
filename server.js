@@ -21,6 +21,18 @@ const MIME_TYPES = {
     '.ico': 'image/x-icon'
 };
 
+// Content Security Policy for development
+const CSP_HEADER = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.auth0.com https://*.topcoder.com https://*.topcoder-dev.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' https:",
+    "connect-src 'self' https://cdn.auth0.com https://*.auth0.com https://*.topcoder.com https://*.topcoder-dev.com",
+    "frame-src 'self' https://*.auth0.com https://*.topcoder.com https://*.topcoder-dev.com",
+    "frame-ancestors 'self'"
+].join('; ');
+
 // Mock data for API endpoints
 const mockContestants = new Map();
 const mockScores = [];
@@ -145,7 +157,10 @@ function handleStatic(req, res) {
                         res.writeHead(404);
                         res.end('Not found');
                     } else {
-                        res.writeHead(200, { 'Content-Type': 'text/html' });
+                        res.writeHead(200, {
+                            'Content-Type': 'text/html',
+                            'Content-Security-Policy': CSP_HEADER
+                        });
                         res.end(content2);
                     }
                 });
@@ -154,7 +169,12 @@ function handleStatic(req, res) {
                 res.end('Server error');
             }
         } else {
-            res.writeHead(200, { 'Content-Type': contentType });
+            const headers = { 'Content-Type': contentType };
+            // Add CSP header for HTML files
+            if (ext === '.html') {
+                headers['Content-Security-Policy'] = CSP_HEADER;
+            }
+            res.writeHead(200, headers);
             res.end(content);
         }
     });
