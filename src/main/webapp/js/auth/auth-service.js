@@ -266,7 +266,10 @@ const AuthService = (function() {
             const connector = document.getElementById('tc-accounts-iframe') ||
                               document.getElementById('tc-auth-connector');
 
+            console.log('Auth: requestTokenRefresh - connector found:', !!connector);
+
             if (!connector || !connector.contentWindow) {
+                console.log('Auth: Connector not available or no contentWindow');
                 if (isLocalhost) {
                     resolve(null); // Silently fail on localhost
                 } else {
@@ -276,6 +279,7 @@ const AuthService = (function() {
             }
 
             const timeout = setTimeout(function() {
+                console.log('Auth: Token refresh timeout');
                 window.removeEventListener('message', handler);
                 if (isLocalhost) {
                     resolve(null); // Silently fail on localhost
@@ -285,15 +289,20 @@ const AuthService = (function() {
             }, isLocalhost ? 3000 : 10000); // Shorter timeout on localhost
 
             const handler = function(event) {
+                console.log('Auth: Message received from:', event.origin);
+
                 // Validate origin
                 try {
                     const connectorOrigin = new URL(AuthConfig.AUTH_CONNECTOR_URL).origin;
                     if (event.origin !== connectorOrigin) {
+                        console.log('Auth: Origin mismatch, expected:', connectorOrigin);
                         return;
                     }
                 } catch (e) {
                     return;
                 }
+
+                console.log('Auth: Message data:', event.data);
 
                 // Handle response (tc-auth-lib format: SUCCESS or FAILURE)
                 const safeFormat = event.data &&
@@ -305,6 +314,7 @@ const AuthService = (function() {
 
                     if (event.data.type === 'SUCCESS') {
                         const newToken = getCookie(AuthConfig.COOKIE_NAME);
+                        console.log('Auth: SUCCESS received, cookie found:', !!newToken);
                         if (newToken) {
                             _currentToken = newToken;
                             dispatchEvent(Events.TOKEN_REFRESHED, { token: newToken });
@@ -313,6 +323,7 @@ const AuthService = (function() {
                             reject(new Error('tcjwt cookie not found after refresh'));
                         }
                     } else {
+                        console.log('Auth: FAILURE received');
                         reject(new Error('Unable to refresh token'));
                     }
                 }
@@ -323,9 +334,11 @@ const AuthService = (function() {
             // Send refresh request (tc-auth-lib format)
             try {
                 const payload = { type: 'REFRESH_TOKEN' };
+                console.log('Auth: Sending REFRESH_TOKEN to connector');
                 connector.contentWindow.postMessage(payload, AuthConfig.AUTH_CONNECTOR_URL);
             } catch (e) {
                 // postMessage may fail on localhost due to cross-origin
+                console.warn('Auth: postMessage failed:', e.message);
                 if (!isLocalhost) {
                     console.warn('Token refresh postMessage failed:', e.message);
                 }
@@ -539,7 +552,9 @@ const AuthService = (function() {
      */
     const generateLoginUrl = function(returnUrl) {
         const retUrl = returnUrl || window.location.href.match(/[^?]*/)?.[0] || window.location.href;
-        const encodedReturnUrl = encodeURIComponent(retUrl);
+        // Add a marker to detect post-login redirect
+        const retUrlWithMarker = retUrl + (retUrl.indexOf('?') === -1 ? '?' : '&') + '_auth=1';
+        const encodedReturnUrl = encodeURIComponent(retUrlWithMarker);
         return AuthConfig.AUTH_CONNECTOR_URL + '?retUrl=' + encodedReturnUrl;
     };
 
@@ -713,10 +728,19 @@ const AuthService = (function() {
         });
     };
 
+    /**
+     * Reset initialization state to allow re-initialization
+     */
+    const reset = function() {
+        _initPromise = null;
+        _isInitialized = false;
+    };
+
     // Public API
     return {
         // Initialization
         init: init,
+        reset: reset,
         isInitialized: function() { return _isInitialized; },
 
         // Token management (following tc-auth-lib API)

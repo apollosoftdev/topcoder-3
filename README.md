@@ -26,6 +26,41 @@ After pulling updates:
 npm run docker:restart
 ```
 
+### Using Docker with HTTPS (local.topcoder-dev.com)
+
+For testing with Topcoder authentication using the `local.topcoder-dev.com` domain:
+
+**1. Add hosts entry:**
+```bash
+npm run hosts:add
+# Or manually: echo '127.0.0.1    local.topcoder-dev.com' | sudo tee -a /etc/hosts
+```
+
+**2. Generate SSL certificates:**
+```bash
+npm run ssl:generate
+```
+
+**3. Trust the certificate (optional, avoids browser warnings):**
+```bash
+# macOS
+npm run ssl:trust:mac
+
+# Linux
+npm run ssl:trust:linux
+```
+
+**4. Build and run with HTTPS:**
+```bash
+npm run docker:restart:https
+```
+
+**5. Access the application:**
+- HTTPS: https://local.topcoder-dev.com/
+- HTTP: http://local.topcoder-dev.com:8080/
+
+> **Note:** The HTTPS Docker setup uses production Topcoder auth URLs to avoid CSP issues with dev auth servers.
+
 ### Using Node.js (Development)
 
 ```bash
@@ -33,6 +68,16 @@ npm run dev
 ```
 
 This starts a development server with mock APIs at http://localhost:8080
+
+For HTTPS development with `local.topcoder-dev.com`:
+```bash
+# Generate and trust certificates first (see Docker HTTPS section above)
+sudo npm run dev:https
+```
+
+Access at https://local.topcoder-dev.com/
+
+> **Note:** `sudo` is required for port 443 on macOS/Linux.
 
 ### Using Maven (Production)
 
@@ -45,11 +90,11 @@ npm start
 
 ### Access URLs
 
-| Page | URL |
-|------|-----|
-| Home | http://localhost:8080/ |
-| Arena | http://localhost:8080/arena.html |
-| Admin | http://localhost:8080/admin.html |
+| Page | HTTP | HTTPS (local.topcoder-dev.com) |
+|------|------|--------------------------------|
+| Home | http://localhost:8080/ | https://local.topcoder-dev.com/ |
+| Arena | http://localhost:8080/arena.html | https://local.topcoder-dev.com/arena.html |
+| Admin | http://localhost:8080/admin.html | https://local.topcoder-dev.com/admin.html |
 
 ---
 
@@ -378,16 +423,25 @@ Get member profile by handle.
 | Script | Description |
 |--------|-------------|
 | `npm run dev` | Start dev server with mock APIs |
+| `npm run dev:https` | Start dev server with HTTPS on port 443 |
 | `npm run build` | Build with Maven |
 | `npm start` | Run production server (Maven/Jetty) |
 | `npm test` | Run all tests |
 | `npm run test:frontend` | Run Jest tests |
 | `npm run test:backend` | Run JUnit tests |
 | `npm run docker:build` | Build Docker image |
-| `npm run docker:run` | Run Docker container |
+| `npm run docker:run` | Run Docker container (HTTP) |
+| `npm run docker:run:https` | Run Docker container (HTTPS on 443) |
 | `npm run docker:stop` | Stop Docker container |
-| `npm run docker:restart` | Rebuild and restart Docker |
+| `npm run docker:restart` | Rebuild and restart Docker (HTTP) |
+| `npm run docker:restart:https` | Rebuild and restart Docker (HTTPS) |
 | `npm run docker:logs` | View Docker container logs |
+| `npm run ssl:generate` | Generate self-signed SSL certificates |
+| `npm run ssl:trust:mac` | Trust SSL certificate on macOS |
+| `npm run ssl:trust:linux` | Trust SSL certificate on Linux |
+| `npm run ssl:setup:mac` | Generate + trust certificate (macOS) |
+| `npm run ssl:setup:linux` | Generate + trust certificate (Linux) |
+| `npm run hosts:add` | Add local.topcoder-dev.com to /etc/hosts |
 | `npm run clean` | Clean build artifacts |
 
 ---
@@ -458,6 +512,12 @@ src/main/
 - Normal on localhost due to cross-origin restrictions
 - Does not affect production deployment
 - Use `npm run dev` which skips iframe auth
+- For full auth testing, use HTTPS with `local.topcoder-dev.com`
+
+### SSL Certificate Issues
+- **Browser warnings**: Trust the certificate using `npm run ssl:trust:mac` or `ssl:trust:linux`
+- **Certificate not found**: Run `npm run ssl:generate` first
+- **Port 443 permission denied**: Use `sudo` (required on macOS/Linux for port 443)
 
 ### Login Redirect Issues
 - Check return URL is properly encoded

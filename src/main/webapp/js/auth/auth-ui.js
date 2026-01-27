@@ -32,6 +32,9 @@ const AuthUI = (function() {
      * Initialize the authentication UI
      */
     const init = function() {
+        // Check if this is a post-login redirect before we clean the URL
+        const wasPostLogin = isPostLoginRedirect();
+
         // Cache DOM elements
         cacheElements();
 
@@ -48,13 +51,85 @@ const AuthUI = (function() {
             .then(function() {
                 if (AuthService.isAuthenticated()) {
                     showAuthenticatedState(AuthService.getMemberInfo());
+                } else if (wasPostLogin) {
+                    // User just came back from login - retry after delay
+                    // (iframe might need more time to load and get token)
+                    console.log('Auth: Post-login redirect detected, retrying...');
+                    setTimeout(function() {
+                        retryAuthCheck();
+                    }, 2000);
                 } else {
                     showUnauthenticatedState();
                 }
             })
             .catch(function(error) {
                 console.error('Auth init error:', error);
-                showErrorState('Failed to initialize authentication');
+                if (wasPostLogin) {
+                    // Retry on post-login even on error
+                    setTimeout(function() {
+                        retryAuthCheck();
+                    }, 2000);
+                } else {
+                    showErrorState('Failed to initialize authentication');
+                }
+            });
+    };
+
+    /**
+     * Retry auth check (used after post-login redirect)
+     */
+    let _retryCount = 0;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [2000, 3000, 5000]; // Increasing delays
+
+    const retryAuthCheck = function() {
+        if (_retryCount >= MAX_RETRIES) {
+            console.log('Auth: Max retries reached, showing unauthenticated');
+            showUnauthenticatedState();
+            _retryCount = 0;
+            return;
+        }
+
+        console.log('Auth: Retry attempt', _retryCount + 1, 'of', MAX_RETRIES);
+
+        // Re-check for token via iframe connector
+        AuthService.getFreshToken()
+            .then(function(token) {
+                if (token) {
+                    const decoded = AuthService.decodeToken(token);
+                    if (decoded && !AuthService.isTokenExpired(decoded)) {
+                        // Token found! Re-init to update state
+                        console.log('Auth: Token found on retry');
+                        _retryCount = 0;
+                        AuthService.reset();
+                        return AuthService.init();
+                    }
+                }
+                return false;
+            })
+            .then(function() {
+                if (AuthService.isAuthenticated()) {
+                    showAuthenticatedState(AuthService.getMemberInfo());
+                    _retryCount = 0;
+                } else {
+                    // Schedule another retry
+                    _retryCount++;
+                    if (_retryCount < MAX_RETRIES) {
+                        setTimeout(retryAuthCheck, RETRY_DELAYS[_retryCount]);
+                    } else {
+                        showUnauthenticatedState();
+                        _retryCount = 0;
+                    }
+                }
+            })
+            .catch(function() {
+                _retryCount++;
+                if (_retryCount < MAX_RETRIES) {
+                    setTimeout(retryAuthCheck, RETRY_DELAYS[_retryCount]);
+                } else {
+                    showUnauthenticatedState();
+                    _retryCount = 0;
+                }
             });
     };
 
@@ -146,17 +221,34 @@ const AuthUI = (function() {
 
     /**
      * Check if user just logged in (post-redirect)
+     * Returns true if this is a post-login redirect
      */
     const checkPostLoginState = function() {
         // Check URL parameters for login indicators
         const urlParams = new URLSearchParams(window.location.search);
         const hasAuthCallback = urlParams.has('code') || urlParams.has('state');
+        const hasAuthMarker = urlParams.has('_auth');
 
-        if (hasAuthCallback) {
+        if (hasAuthCallback || hasAuthMarker) {
             // Clean up URL after login redirect
-            const cleanUrl = window.location.origin + window.location.pathname;
+            urlParams.delete('code');
+            urlParams.delete('state');
+            urlParams.delete('_auth');
+            const remainingParams = urlParams.toString();
+            const cleanUrl = window.location.origin + window.location.pathname +
+                (remainingParams ? '?' + remainingParams : '');
             window.history.replaceState({}, document.title, cleanUrl);
+            return true;
         }
+        return false;
+    };
+
+    /**
+     * Check if this is a post-login redirect and retry auth after delay
+     */
+    const isPostLoginRedirect = function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.has('_auth') || urlParams.has('code') || urlParams.has('state');
     };
 
     /**
@@ -182,8 +274,8 @@ const AuthUI = (function() {
      */
     const handleRetry = function(event) {
         event.preventDefault();
-        // Reset initialization promise to allow retry
-        AuthService._initPromise = null;
+        // Reset initialization state to allow retry
+        AuthService.reset();
         init();
     };
 
