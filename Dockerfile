@@ -60,12 +60,33 @@ RUN echo "jetty.ssl.port=443" >> ${JETTY_BASE}/start.d/ssl.ini && \
     echo "jetty.sslContext.keyStorePassword=changeit" >> ${JETTY_BASE}/start.d/ssl.ini && \
     echo "jetty.sslContext.keyManagerPassword=changeit" >> ${JETTY_BASE}/start.d/ssl.ini
 
-# Environment
-ENV ENVIRONMENT=production
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
+# =============================================================================
+# Environment Variables (with dev defaults)
+# =============================================================================
+ENV NODE_ENV=local
 ENV PORT=8080
+
+# Topcoder Authentication - Dev Environment
+ENV TC_AUTH_CONNECTOR_URL=https://accounts-auth0.topcoder-dev.com
+ENV TC_AUTH_URL=https://accounts-auth0.topcoder-dev.com
+ENV TC_ACCOUNTS_APP_URL=https://accounts.topcoder-dev.com
+ENV TC_AUTH0_CDN_URL=https://cdn.auth0.com
+ENV TC_JWKS_URL=https://topcoder-dev.auth0.com/.well-known/jwks.json
+
+# Cookie Configuration
+ENV TC_COOKIE_NAME=tcjwt
+ENV TC_V3_COOKIE_NAME=v3jwt
+ENV TC_REFRESH_COOKIE_NAME=tcrft
+ENV TC_TOKEN_EXPIRATION_OFFSET=60
+
+# API Configuration
+ENV API_BASE_URL=/api
 
 EXPOSE 8080 443
 
-# Run Jetty
 WORKDIR ${JETTY_BASE}
-CMD ["java", "-jar", "/opt/jetty/start.jar"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

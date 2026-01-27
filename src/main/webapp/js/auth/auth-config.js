@@ -1,18 +1,30 @@
 /**
  * Topcoder Authentication Configuration
  * Environment-specific configuration for tc-auth-lib integration
+ *
+ * Configuration is loaded from:
+ * 1. window.__ENV__ (injected by server from .env file)
+ * 2. Fallback defaults for production
  */
 const AuthConfig = (function() {
     'use strict';
 
-    // Detect environment based on hostname
+    // Get environment variables from server injection or use defaults
+    const env = window.__ENV__ || {};
+
+    // Detect environment based on hostname or env variable
     const getEnvironment = function() {
+        // Check injected environment first
+        if (env.NODE_ENV) {
+            return env.NODE_ENV;
+        }
+
         const hostname = window.location.hostname;
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
             return 'development';
         }
         if (hostname === 'local.topcoder-dev.com') {
-            return 'local'; // Special local dev environment
+            return 'local';
         }
         if (hostname.includes('dev.') || hostname.includes('-dev')) {
             return 'development';
@@ -25,48 +37,43 @@ const AuthConfig = (function() {
                         window.location.hostname === '127.0.0.1';
     const isLocalTopcoder = window.location.hostname === 'local.topcoder-dev.com';
 
-    const environments = {
-        // Local development with local.topcoder-dev.com (HTTPS)
-        // Uses production auth URLs to avoid CSP issues on dev auth
-        local: {
-            AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder.com',
-            AUTH_URL: 'https://accounts-auth0.topcoder.com',
-            ACCOUNTS_APP_URL: 'https://accounts.topcoder.com',
-            AUTH0_CDN_URL: 'https://cdn.auth0.com',
-            COOKIE_NAME: 'tcjwt',
-            V3_COOKIE_NAME: 'v3jwt',
-            REFRESH_COOKIE_NAME: 'tcrft',
-            TOKEN_EXPIRATION_OFFSET: 60,
-            API_BASE_URL: '/api'
-        },
-        // Development (localhost) - uses production auth to avoid CSP issues
-        development: {
-            AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder.com',
-            AUTH_URL: 'https://accounts-auth0.topcoder.com',
-            ACCOUNTS_APP_URL: 'https://accounts.topcoder.com',
-            AUTH0_CDN_URL: 'https://cdn.auth0.com',
-            COOKIE_NAME: 'tcjwt',
-            V3_COOKIE_NAME: 'v3jwt',
-            REFRESH_COOKIE_NAME: 'tcrft',
-            TOKEN_EXPIRATION_OFFSET: 60,
-            API_BASE_URL: '/api'
-        },
-        // Production
-        production: {
-            AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder.com',
-            AUTH_URL: 'https://accounts-auth0.topcoder.com',
-            ACCOUNTS_APP_URL: 'https://accounts.topcoder.com',
-            AUTH0_CDN_URL: 'https://cdn.auth0.com',
-            COOKIE_NAME: 'tcjwt',
-            V3_COOKIE_NAME: 'v3jwt',
-            REFRESH_COOKIE_NAME: 'tcrft',
-            TOKEN_EXPIRATION_OFFSET: 60,
-            API_BASE_URL: '/api'
-        }
+    const currentEnv = getEnvironment();
+
+    // Default configuration (production fallbacks)
+    const defaults = {
+        AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder.com',
+        AUTH_URL: 'https://accounts-auth0.topcoder.com',
+        ACCOUNTS_APP_URL: 'https://accounts.topcoder.com',
+        AUTH0_CDN_URL: 'https://cdn.auth0.com',
+        COOKIE_NAME: 'tcjwt',
+        V3_COOKIE_NAME: 'v3jwt',
+        REFRESH_COOKIE_NAME: 'tcrft',
+        TOKEN_EXPIRATION_OFFSET: 60,
+        API_BASE_URL: '/api'
     };
 
-    const currentEnv = getEnvironment();
-    const config = environments[currentEnv];
+    // Build configuration from env or defaults
+    const config = {
+        AUTH_CONNECTOR_URL: env.TC_AUTH_CONNECTOR_URL || defaults.AUTH_CONNECTOR_URL,
+        AUTH_URL: env.TC_AUTH_URL || defaults.AUTH_URL,
+        ACCOUNTS_APP_URL: env.TC_ACCOUNTS_APP_URL || defaults.ACCOUNTS_APP_URL,
+        AUTH0_CDN_URL: env.TC_AUTH0_CDN_URL || defaults.AUTH0_CDN_URL,
+        COOKIE_NAME: env.TC_COOKIE_NAME || defaults.COOKIE_NAME,
+        V3_COOKIE_NAME: env.TC_V3_COOKIE_NAME || defaults.V3_COOKIE_NAME,
+        REFRESH_COOKIE_NAME: env.TC_REFRESH_COOKIE_NAME || defaults.REFRESH_COOKIE_NAME,
+        TOKEN_EXPIRATION_OFFSET: env.TC_TOKEN_EXPIRATION_OFFSET || defaults.TOKEN_EXPIRATION_OFFSET,
+        API_BASE_URL: env.API_BASE_URL || defaults.API_BASE_URL
+    };
+
+    // Log configuration in development
+    if (currentEnv !== 'production') {
+        console.log('AuthConfig loaded:', {
+            env: currentEnv,
+            AUTH_CONNECTOR_URL: config.AUTH_CONNECTOR_URL,
+            isLocalhost: isLocalhost,
+            isLocalTopcoder: isLocalTopcoder
+        });
+    }
 
     return {
         // Current environment
@@ -114,7 +121,12 @@ const AuthConfig = (function() {
 
         // Check if environment is development
         isDevelopment: function() {
-            return currentEnv === 'development';
+            return currentEnv === 'development' || currentEnv === 'local';
+        },
+
+        // Check if using dev auth URLs
+        isDevAuth: function() {
+            return config.AUTH_CONNECTOR_URL.includes('topcoder-dev.com');
         }
     };
 })();

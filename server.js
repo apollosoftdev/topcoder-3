@@ -9,16 +9,50 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-// Configuration
-const HTTP_PORT = process.env.PORT || 8080;
-const HTTPS_PORT = process.env.HTTPS_PORT || 443;
+// Load .env file
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    envContent.split('\n').forEach(line => {
+        line = line.trim();
+        if (line && !line.startsWith('#')) {
+            const [key, ...valueParts] = line.split('=');
+            const value = valueParts.join('=').trim();
+            if (key && value && !process.env[key]) {
+                process.env[key] = value;
+            }
+        }
+    });
+    console.log('Loaded .env configuration');
+}
+
+// Configuration from environment
+const HTTP_PORT = parseInt(process.env.PORT) || 8080;
+const HTTPS_PORT = parseInt(process.env.HTTPS_PORT) || 443;
 const USE_HTTPS = process.env.USE_HTTPS === 'true' || process.argv.includes('--https');
 const WEBAPP_DIR = path.join(__dirname, 'src/main/webapp');
 const SSL_DIR = path.join(__dirname, 'ssl');
 
-// SSL certificate paths
-const SSL_KEY = path.join(SSL_DIR, 'local.topcoder-dev.com.key');
-const SSL_CERT = path.join(SSL_DIR, 'local.topcoder-dev.com.crt');
+// SSL certificate paths from environment
+const SSL_KEY = path.join(__dirname, process.env.SSL_KEY_PATH || 'ssl/local.topcoder-dev.com.key');
+const SSL_CERT = path.join(__dirname, process.env.SSL_CERT_PATH || 'ssl/local.topcoder-dev.com.crt');
+
+// Environment variables to inject into frontend
+const FRONTEND_ENV = {
+    NODE_ENV: process.env.NODE_ENV || 'development',
+    TC_AUTH_CONNECTOR_URL: process.env.TC_AUTH_CONNECTOR_URL || 'https://accounts-auth0.topcoder-dev.com',
+    TC_AUTH_URL: process.env.TC_AUTH_URL || 'https://accounts-auth0.topcoder-dev.com',
+    TC_ACCOUNTS_APP_URL: process.env.TC_ACCOUNTS_APP_URL || 'https://accounts.topcoder-dev.com',
+    TC_AUTH0_CDN_URL: process.env.TC_AUTH0_CDN_URL || 'https://cdn.auth0.com',
+    TC_COOKIE_NAME: process.env.TC_COOKIE_NAME || 'tcjwt',
+    TC_V3_COOKIE_NAME: process.env.TC_V3_COOKIE_NAME || 'v3jwt',
+    TC_REFRESH_COOKIE_NAME: process.env.TC_REFRESH_COOKIE_NAME || 'tcrft',
+    TC_TOKEN_EXPIRATION_OFFSET: parseInt(process.env.TC_TOKEN_EXPIRATION_OFFSET) || 60,
+    API_BASE_URL: process.env.API_BASE_URL || '/api'
+};
+
+// Script to inject environment variables into HTML
+const ENV_SCRIPT = `<script>window.__ENV__ = ${JSON.stringify(FRONTEND_ENV)};</script>`;
 
 // MIME types
 const MIME_TYPES = {
@@ -232,11 +266,14 @@ function handleStatic(req, res) {
                         res.writeHead(404);
                         res.end('Not found');
                     } else {
+                        // Inject environment variables into HTML
+                        let html = content2.toString();
+                        html = html.replace('<head>', '<head>\n    ' + ENV_SCRIPT);
                         res.writeHead(200, {
                             'Content-Type': 'text/html',
                             'Content-Security-Policy': CSP_HEADER
                         });
-                        res.end(content2);
+                        res.end(html);
                     }
                 });
             } else {
@@ -245,9 +282,15 @@ function handleStatic(req, res) {
             }
         } else {
             const headers = { 'Content-Type': contentType };
-            // Add CSP header for HTML files
+            // Add CSP header and inject env for HTML files
             if (ext === '.html') {
                 headers['Content-Security-Policy'] = CSP_HEADER;
+                // Inject environment variables into HTML
+                let html = content.toString();
+                html = html.replace('<head>', '<head>\n    ' + ENV_SCRIPT);
+                res.writeHead(200, headers);
+                res.end(html);
+                return;
             }
             res.writeHead(200, headers);
             res.end(content);
