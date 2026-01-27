@@ -11,7 +11,7 @@ if [ -f "${JETTY_BASE}/webapps/ROOT.war" ] && [ ! -d "$WEBAPP_DIR" ]; then
     echo "Extracting WAR file..."
     mkdir -p "$WEBAPP_DIR"
     cd "$WEBAPP_DIR"
-    jar -xf ../ROOT.war
+    unzip -q ../ROOT.war
     rm ../ROOT.war
 fi
 

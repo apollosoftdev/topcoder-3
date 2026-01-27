@@ -24,7 +24,7 @@ WORKDIR /app
 # Install Jetty
 ENV JETTY_VERSION=11.0.18
 ENV JETTY_HOME=/opt/jetty
-RUN apt-get update && apt-get install -y curl && \
+RUN apt-get update && apt-get install -y curl unzip && \
     curl -fsSL https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-home/${JETTY_VERSION}/jetty-home-${JETTY_VERSION}.tar.gz | tar xzf - -C /opt && \
     mv /opt/jetty-home-${JETTY_VERSION} ${JETTY_HOME} && \
     useradd -m jetty && \
