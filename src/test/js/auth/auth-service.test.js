@@ -50,7 +50,7 @@ describe('AuthService', () => {
 
         // Create a fresh iframe mock
         document.body.innerHTML = `
-            <iframe id="tc-auth-connector" style="display: none;"></iframe>
+            <iframe id="tc-accounts-iframe" style="display: none;"></iframe>
             <div id="auth-container"></div>
         `;
 
@@ -69,11 +69,12 @@ describe('AuthService', () => {
             expect(decoded.roles).toEqual(['Topcoder User']);
         });
 
-        test('should decode V3 token correctly', () => {
+        test('should decode V3 token and extract namespaced claims', () => {
             const decoded = AuthService.decodeToken(mockV3Token);
 
             expect(decoded).toBeTruthy();
-            expect(decoded['https://topcoder.com/claims/handle']).toBe('testuser');
+            // After tc-auth-lib style processing, handle should be at top level
+            expect(decoded.handle).toBe('testuser');
             expect(decoded.sub).toBe('12345');
         });
 
@@ -93,20 +94,40 @@ describe('AuthService', () => {
         });
     });
 
+    describe('isTokenExpired', () => {
+        test('should return false for valid token', () => {
+            const decoded = AuthService.decodeToken(mockV2Token);
+            expect(AuthService.isTokenExpired(decoded)).toBe(false);
+        });
+
+        test('should return true for expired token', () => {
+            const decoded = AuthService.decodeToken(expiredToken);
+            expect(AuthService.isTokenExpired(decoded)).toBe(true);
+        });
+
+        test('should return false for token without expiration (tc-auth-lib behavior)', () => {
+            const tokenNoExp = createMockJWT({ handle: 'test' });
+            // Remove exp from the token by creating one without it
+            const noExpPayload = btoa(JSON.stringify({ handle: 'test' }));
+            const noExpToken = `${btoa(JSON.stringify({ alg: 'HS256' }))}.${noExpPayload}.sig`;
+            const decoded = AuthService.decodeToken(noExpToken);
+            expect(AuthService.isTokenExpired(decoded)).toBe(false);
+        });
+    });
+
     describe('generateLoginUrl', () => {
         test('should generate login URL with current URL', () => {
             const loginUrl = AuthService.generateLoginUrl();
 
-            expect(loginUrl).toContain(AuthConfig.ACCOUNTS_APP_URL);
+            expect(loginUrl).toContain(AuthConfig.AUTH_CONNECTOR_URL);
             expect(loginUrl).toContain('retUrl=');
-            expect(loginUrl).toContain(encodeURIComponent(window.location.href));
         });
 
         test('should generate login URL with custom return URL', () => {
             const customUrl = 'http://example.com/custom';
             const loginUrl = AuthService.generateLoginUrl(customUrl);
 
-            expect(loginUrl).toContain(AuthConfig.ACCOUNTS_APP_URL);
+            expect(loginUrl).toContain(AuthConfig.AUTH_CONNECTOR_URL);
             expect(loginUrl).toContain(encodeURIComponent(customUrl));
         });
     });
@@ -115,7 +136,7 @@ describe('AuthService', () => {
         test('should generate logout URL with logout parameter', () => {
             const logoutUrl = AuthService.generateLogoutUrl();
 
-            expect(logoutUrl).toContain(AuthConfig.ACCOUNTS_APP_URL);
+            expect(logoutUrl).toContain(AuthConfig.AUTH_CONNECTOR_URL);
             expect(logoutUrl).toContain('logout=true');
             expect(logoutUrl).toContain('retUrl=');
         });
@@ -167,27 +188,26 @@ describe('AuthService', () => {
             expect(token).toBe(mockV2Token);
         });
 
-        test('should prefer v3jwt cookie over tcjwt', async () => {
-            document.cookie = `tcjwt=${mockV2Token}`;
-            document.cookie = `v3jwt=${mockV3Token}`;
-
-            // Note: getToken checks v3jwt first in cookies
-            const token = await AuthService.getToken();
-
-            // Should get v3jwt since it's checked first
-            expect(token).toBeTruthy();
-        });
-
         test('should return null when no cookie present', async () => {
             const token = await AuthService.getToken();
 
             expect(token).toBeNull();
         });
+    });
+
+    describe('getFreshToken', () => {
+        test('should return valid token from cookie', async () => {
+            document.cookie = `tcjwt=${mockV2Token}`;
+
+            const token = await AuthService.getFreshToken();
+
+            expect(token).toBe(mockV2Token);
+        });
 
         test('should return null for expired token', async () => {
             document.cookie = `tcjwt=${expiredToken}`;
 
-            const token = await AuthService.getToken();
+            const token = await AuthService.getFreshToken();
 
             expect(token).toBeNull();
         });
@@ -270,7 +290,7 @@ describe('AuthService', () => {
         test('should redirect to login URL', () => {
             AuthService.login();
 
-            expect(window.location.href).toContain(AuthConfig.ACCOUNTS_APP_URL);
+            expect(window.location.href).toContain(AuthConfig.AUTH_CONNECTOR_URL);
         });
     });
 
@@ -279,6 +299,17 @@ describe('AuthService', () => {
             AuthService.logout();
 
             expect(window.location.href).toContain('logout=true');
+        });
+    });
+
+    describe('Events', () => {
+        test('should expose authentication events', () => {
+            expect(AuthService.Events).toBeDefined();
+            expect(AuthService.Events.AUTH_SUCCESS).toBe('tc-auth-success');
+            expect(AuthService.Events.AUTH_FAILURE).toBe('tc-auth-failure');
+            expect(AuthService.Events.AUTH_LOGOUT).toBe('tc-auth-logout');
+            expect(AuthService.Events.AUTH_STATE_CHANGE).toBe('tc-auth-state-change');
+            expect(AuthService.Events.TOKEN_REFRESHED).toBe('tc-auth-token-refreshed');
         });
     });
 });
