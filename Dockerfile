@@ -21,13 +21,15 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
-# Install Jetty
+# Install Jetty and required tools
 ENV JETTY_VERSION=11.0.18
 ENV JETTY_HOME=/opt/jetty
-RUN apt-get update && apt-get install -y curl unzip && \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl unzip && \
     curl -fsSL https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-home/${JETTY_VERSION}/jetty-home-${JETTY_VERSION}.tar.gz | tar xzf - -C /opt && \
     mv /opt/jetty-home-${JETTY_VERSION} ${JETTY_HOME} && \
     useradd -m jetty && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # Setup Jetty base with HTTP and HTTPS support
