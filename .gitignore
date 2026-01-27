@@ -1,3 +1,26 @@
-temp
-node_modules
-dist
+# Build output
+target/
+dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Node
+node_modules/
+src/main/webapp/node/
+src/main/webapp/node_modules/
+
+# Temp
+temp/
+*.log
+
+# Environment
+.env
+.env.local
+
+# Coverage
+coverage/
+.nyc_output/
