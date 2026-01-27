@@ -1,6 +1,11 @@
 /**
  * Topcoder Authentication Service
  * Handles authentication with tc-auth-lib, token management, and user session
+ *
+ * This service integrates with Topcoder's tc-auth-lib library pattern:
+ * - Uses iframe-based connector for token refresh
+ * - Supports both V2 (tcjwt cookie) and V3 (connector) tokens
+ * - Automatically refreshes tokens before expiration
  */
 const AuthService = (function() {
     'use strict';
@@ -10,6 +15,8 @@ const AuthService = (function() {
     let _isInitialized = false;
     let _connectorReady = false;
     let _initPromise = null;
+    let _refreshTimer = null;
+    let _currentToken = null;
 
     // Error types
     const ErrorTypes = {
@@ -19,6 +26,15 @@ const AuthService = (function() {
         NETWORK_ERROR: 'NETWORK_ERROR',
         SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
         UNAUTHORIZED: 'UNAUTHORIZED'
+    };
+
+    // Custom events for authentication state changes
+    const Events = {
+        AUTH_SUCCESS: 'tc-auth-success',
+        AUTH_FAILURE: 'tc-auth-failure',
+        AUTH_LOGOUT: 'tc-auth-logout',
+        AUTH_STATE_CHANGE: 'tc-auth-state-change',
+        TOKEN_REFRESHED: 'tc-auth-token-refreshed'
     };
 
     /**
@@ -32,12 +48,8 @@ const AuthService = (function() {
 
         _initPromise = new Promise(function(resolve, reject) {
             try {
-                // Check if tc-auth-lib connector is available
-                const connector = document.getElementById('tc-auth-connector');
-                if (!connector) {
-                    console.warn('Auth connector iframe not found, creating dynamically');
-                    createConnectorIframe();
-                }
+                // Configure connector (following tc-auth-lib pattern)
+                configureConnector();
 
                 // Wait for connector to be ready
                 waitForConnector()
@@ -47,12 +59,16 @@ const AuthService = (function() {
                         // Check for existing session
                         return checkExistingSession();
                     })
-                    .then(function() {
+                    .then(function(authenticated) {
+                        if (authenticated) {
+                            dispatchEvent(Events.AUTH_SUCCESS, { memberInfo: _memberInfo });
+                        }
                         resolve(true);
                     })
                     .catch(function(error) {
                         console.error('Auth initialization failed:', error);
                         _isInitialized = true; // Mark as initialized even on failure
+                        dispatchEvent(Events.AUTH_FAILURE, { error: error.message });
                         resolve(false); // Resolve with false, don't reject
                     });
             } catch (error) {
@@ -65,15 +81,28 @@ const AuthService = (function() {
     };
 
     /**
-     * Create the connector iframe dynamically if not present
+     * Configure the authentication connector
+     * Following tc-auth-lib configureConnector() pattern
      */
-    const createConnectorIframe = function() {
-        const iframe = document.createElement('iframe');
-        iframe.id = 'tc-auth-connector';
-        iframe.src = AuthConfig.AUTH_CONNECTOR_URL + '/connector.html';
-        iframe.style.display = 'none';
-        iframe.title = 'Authentication Connector';
-        document.body.appendChild(iframe);
+    const configureConnector = function() {
+        // Check if connector iframe already exists
+        let connector = document.getElementById('tc-accounts-iframe');
+        if (!connector) {
+            connector = document.getElementById('tc-auth-connector');
+        }
+
+        if (!connector) {
+            // Create the connector iframe (tc-auth-lib pattern)
+            connector = document.createElement('iframe');
+            connector.id = 'tc-accounts-iframe';
+            connector.src = AuthConfig.AUTH_CONNECTOR_URL;
+            connector.width = 0;
+            connector.height = 0;
+            connector.frameBorder = 0;
+            connector.style.display = 'none';
+            connector.title = 'Topcoder Authentication Connector';
+            document.body.appendChild(connector);
+        }
     };
 
     /**
@@ -87,11 +116,25 @@ const AuthService = (function() {
 
             const check = function() {
                 attempts++;
-                const connector = document.getElementById('tc-auth-connector');
+                const connector = document.getElementById('tc-accounts-iframe') ||
+                                  document.getElementById('tc-auth-connector');
 
                 if (connector && connector.contentWindow) {
-                    resolve();
-                    return;
+                    // Add load event listener for proper initialization
+                    if (connector.contentDocument && connector.contentDocument.readyState === 'complete') {
+                        resolve();
+                        return;
+                    }
+
+                    connector.onload = function() {
+                        resolve();
+                    };
+
+                    // If already loaded
+                    if (attempts > 10) {
+                        resolve();
+                        return;
+                    }
                 }
 
                 if (attempts >= maxAttempts) {
@@ -110,12 +153,15 @@ const AuthService = (function() {
      * Check for existing authentication session
      */
     const checkExistingSession = function() {
-        return getToken()
+        return getFreshToken()
             .then(function(token) {
                 if (token) {
+                    _currentToken = token;
                     const decoded = decodeToken(token);
                     if (decoded && !isTokenExpired(decoded)) {
                         _memberInfo = extractMemberInfo(decoded);
+                        // Schedule automatic token refresh
+                        scheduleTokenRefresh(decoded);
                         return true;
                     }
                 }
@@ -127,28 +173,37 @@ const AuthService = (function() {
     };
 
     /**
-     * Get fresh token from tc-auth-lib
-     * Wrapper for getFreshToken() - refreshes if needed
+     * Get fresh token - following tc-auth-lib getFreshToken() pattern
+     * First checks tcjwt cookie, then requests from connector if expired
      */
-    const getToken = function() {
+    const getFreshToken = function() {
         return new Promise(function(resolve, reject) {
-            // Try to read token from cookie
-            const token = getCookie(AuthConfig.COOKIE_NAME) || getCookie(AuthConfig.V3_COOKIE_NAME);
+            // Try to read V2 token from cookie first (tcjwt)
+            const tokenV2 = getCookie(AuthConfig.COOKIE_NAME);
 
-            if (token) {
-                const decoded = decodeToken(token);
-                if (decoded && !isTokenExpired(decoded)) {
-                    resolve(token);
+            if (tokenV2) {
+                const decoded = decodeToken(tokenV2);
+                // 65 is the offset in seconds, same as tc-auth-lib
+                if (decoded && !isTokenExpired(decoded, 65)) {
+                    resolve(tokenV2);
                     return;
                 }
             }
 
-            // If no valid token in cookie, try to get from connector
+            // If no valid token in cookie, try to refresh from connector
             if (_connectorReady) {
-                requestTokenFromConnector()
-                    .then(resolve)
+                requestTokenRefresh()
+                    .then(function() {
+                        // After refresh, read the new cookie
+                        const newToken = getCookie(AuthConfig.COOKIE_NAME);
+                        if (newToken) {
+                            resolve(newToken);
+                        } else {
+                            resolve(null);
+                        }
+                    })
                     .catch(function() {
-                        resolve(null); // Return null instead of rejecting
+                        resolve(null);
                     });
             } else {
                 resolve(null);
@@ -157,11 +212,27 @@ const AuthService = (function() {
     };
 
     /**
-     * Request token from the connector iframe via postMessage
+     * Get token - wrapper for backward compatibility
      */
-    const requestTokenFromConnector = function() {
+    const getToken = function() {
+        if (_currentToken) {
+            const decoded = decodeToken(_currentToken);
+            if (decoded && !isTokenExpired(decoded)) {
+                return Promise.resolve(_currentToken);
+            }
+        }
+        return getFreshToken();
+    };
+
+    /**
+     * Request token refresh from connector iframe
+     * Following tc-auth-lib proxyCall pattern
+     */
+    const requestTokenRefresh = function() {
         return new Promise(function(resolve, reject) {
-            const connector = document.getElementById('tc-auth-connector');
+            const connector = document.getElementById('tc-accounts-iframe') ||
+                              document.getElementById('tc-auth-connector');
+
             if (!connector || !connector.contentWindow) {
                 reject(new Error('Connector not available'));
                 return;
@@ -169,32 +240,99 @@ const AuthService = (function() {
 
             const timeout = setTimeout(function() {
                 window.removeEventListener('message', handler);
-                reject(new Error('Token request timeout'));
-            }, 5000);
+                reject(new Error('Token refresh timeout'));
+            }, 10000);
 
             const handler = function(event) {
-                if (event.origin !== new URL(AuthConfig.AUTH_CONNECTOR_URL).origin) {
+                // Validate origin
+                try {
+                    const connectorOrigin = new URL(AuthConfig.AUTH_CONNECTOR_URL).origin;
+                    if (event.origin !== connectorOrigin) {
+                        return;
+                    }
+                } catch (e) {
                     return;
                 }
 
-                if (event.data && event.data.type === 'AUTH_TOKEN_RESPONSE') {
+                // Handle response (tc-auth-lib format: SUCCESS or FAILURE)
+                const safeFormat = event.data &&
+                    (event.data.type === 'SUCCESS' || event.data.type === 'FAILURE');
+
+                if (safeFormat) {
                     clearTimeout(timeout);
                     window.removeEventListener('message', handler);
-                    resolve(event.data.token);
+
+                    if (event.data.type === 'SUCCESS') {
+                        const newToken = getCookie(AuthConfig.COOKIE_NAME);
+                        if (newToken) {
+                            _currentToken = newToken;
+                            dispatchEvent(Events.TOKEN_REFRESHED, { token: newToken });
+                            resolve(newToken);
+                        } else {
+                            reject(new Error('tcjwt cookie not found after refresh'));
+                        }
+                    } else {
+                        reject(new Error('Unable to refresh token'));
+                    }
                 }
             };
 
             window.addEventListener('message', handler);
 
-            connector.contentWindow.postMessage(
-                { type: 'GET_AUTH_TOKEN' },
-                AuthConfig.AUTH_CONNECTOR_URL
-            );
+            // Send refresh request (tc-auth-lib format)
+            const payload = { type: 'REFRESH_TOKEN' };
+            connector.contentWindow.postMessage(payload, AuthConfig.AUTH_CONNECTOR_URL);
         });
     };
 
     /**
+     * Schedule automatic token refresh before expiration
+     */
+    const scheduleTokenRefresh = function(decodedToken) {
+        // Clear any existing timer
+        if (_refreshTimer) {
+            clearTimeout(_refreshTimer);
+            _refreshTimer = null;
+        }
+
+        if (!decodedToken || !decodedToken.exp) {
+            return;
+        }
+
+        // Calculate time until refresh needed (using same offset as tc-auth-lib)
+        const expirationMs = decodedToken.exp * 1000;
+        const offsetMs = AuthConfig.TOKEN_EXPIRATION_OFFSET * 1000;
+        const refreshTime = expirationMs - offsetMs - Date.now();
+
+        if (refreshTime > 0) {
+            _refreshTimer = setTimeout(function() {
+                getFreshToken()
+                    .then(function(token) {
+                        if (token) {
+                            const decoded = decodeToken(token);
+                            if (decoded) {
+                                _memberInfo = extractMemberInfo(decoded);
+                                scheduleTokenRefresh(decoded);
+                            }
+                        } else {
+                            // Token refresh failed, user needs to re-authenticate
+                            _memberInfo = null;
+                            dispatchEvent(Events.AUTH_STATE_CHANGE, {
+                                authenticated: false,
+                                reason: 'token_expired'
+                            });
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Automatic token refresh failed:', error);
+                    });
+            }, refreshTime);
+        }
+    };
+
+    /**
      * Decode JWT token and extract payload
+     * Following tc-auth-lib decodeToken pattern
      */
     const decodeToken = function(token) {
         if (!token) return null;
@@ -205,9 +343,55 @@ const AuthService = (function() {
                 return null;
             }
 
-            const payload = parts[1];
-            const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-            return JSON.parse(decoded);
+            // URL-safe base64 decode (tc-auth-lib pattern)
+            let payload = parts[1];
+            payload = payload.replace(/-/g, '+').replace(/_/g, '/');
+
+            // Add padding if needed
+            switch (payload.length % 4) {
+                case 2:
+                    payload += '==';
+                    break;
+                case 3:
+                    payload += '=';
+                    break;
+            }
+
+            const decoded = decodeURIComponent(escape(atob(payload)));
+            const parsed = JSON.parse(decoded);
+
+            // Extract claims following tc-auth-lib pattern (handles namespaced claims)
+            // userId - find any key containing 'userId'
+            if (!parsed.userId) {
+                for (const key in parsed) {
+                    if (key.indexOf('userId') !== -1) {
+                        parsed.userId = parseInt(parsed[key], 10);
+                        break;
+                    }
+                }
+            }
+
+            // handle - find any key containing 'handle'
+            if (!parsed.handle) {
+                for (const key in parsed) {
+                    if (key.indexOf('handle') !== -1) {
+                        parsed.handle = parsed[key];
+                        break;
+                    }
+                }
+            }
+
+            // roles - find any key containing 'roles'
+            if (!parsed.roles) {
+                for (const key in parsed) {
+                    if (key.indexOf('roles') !== -1) {
+                        parsed.roles = parsed[key];
+                        break;
+                    }
+                }
+            }
+
+            return parsed;
         } catch (error) {
             console.error('Failed to decode token:', error);
             return null;
@@ -216,48 +400,49 @@ const AuthService = (function() {
 
     /**
      * Check if token is expired
+     * Following tc-auth-lib isTokenExpired pattern
      */
-    const isTokenExpired = function(decodedToken) {
-        if (!decodedToken || !decodedToken.exp) {
-            return true;
+    const isTokenExpired = function(decodedToken, offsetSeconds) {
+        if (!decodedToken || typeof decodedToken.exp === 'undefined') {
+            return false; // No expiration means not expired (tc-auth-lib behavior)
         }
 
-        const now = Math.floor(Date.now() / 1000);
-        const expirationWithOffset = decodedToken.exp - AuthConfig.TOKEN_EXPIRATION_OFFSET;
-        return now >= expirationWithOffset;
+        const offset = offsetSeconds || AuthConfig.TOKEN_EXPIRATION_OFFSET;
+        const expirationDate = new Date(0);
+        expirationDate.setUTCSeconds(decodedToken.exp);
+
+        return !(expirationDate.valueOf() > (new Date().valueOf() + (offset * 1000)));
     };
 
     /**
      * Extract member info from decoded token
-     * Supports both V2 (HS256) and V3 (RS256) token formats
+     * Supports both V2 (direct claims) and V3 (namespaced claims) formats
      */
     const extractMemberInfo = function(decodedToken) {
         if (!decodedToken) return null;
 
-        // V3 token format - namespaced claims
-        const namespace = AuthConfig.CLAIMS_NAMESPACE;
-        if (decodedToken[namespace + 'handle']) {
-            return {
-                handle: decodedToken[namespace + 'handle'],
-                userId: decodedToken[namespace + 'userId'] || decodedToken.sub,
-                email: decodedToken[namespace + 'email'] || decodedToken.email,
-                roles: decodedToken[namespace + 'roles'] || [],
-                isV3Token: true
-            };
+        // After tc-auth-lib processing, handle/userId/roles should be at top level
+        const handle = decodedToken.handle;
+        const userId = decodedToken.userId || decodedToken.sub;
+        const email = decodedToken.email;
+        const roles = decodedToken.roles || [];
+
+        if (!handle) {
+            return null;
         }
 
-        // V2 token format - direct claims
-        if (decodedToken.handle) {
-            return {
-                handle: decodedToken.handle,
-                userId: decodedToken.userId || decodedToken.sub,
-                email: decodedToken.email,
-                roles: decodedToken.roles || [],
-                isV3Token: false
-            };
-        }
+        // Determine if V3 token by checking for namespaced claims
+        const isV3Token = Object.keys(decodedToken).some(function(key) {
+            return key.indexOf('https://topcoder.com') !== -1;
+        });
 
-        return null;
+        return {
+            handle: handle,
+            userId: userId,
+            email: email,
+            roles: Array.isArray(roles) ? roles : [],
+            isV3Token: isV3Token
+        };
     };
 
     /**
@@ -302,20 +487,22 @@ const AuthService = (function() {
 
     /**
      * Generate login URL with return URL
+     * Following platform-ui pattern: ${authUrl}?retUrl=${encodedRetUrl}
      */
     const generateLoginUrl = function(returnUrl) {
-        const currentUrl = returnUrl || window.location.href;
-        const encodedReturnUrl = encodeURIComponent(currentUrl);
-        return AuthConfig.ACCOUNTS_APP_URL + '?retUrl=' + encodedReturnUrl;
+        const retUrl = returnUrl || window.location.href.match(/[^?]*/)?.[0] || window.location.href;
+        const encodedReturnUrl = encodeURIComponent(retUrl);
+        return AuthConfig.AUTH_CONNECTOR_URL + '?retUrl=' + encodedReturnUrl;
     };
 
     /**
      * Generate logout URL with return URL
+     * Following platform-ui pattern: ${authUrl}?logout=true&retUrl=${encodedRetUrl}
      */
     const generateLogoutUrl = function(returnUrl) {
-        const currentUrl = returnUrl || window.location.href;
-        const encodedReturnUrl = encodeURIComponent(currentUrl);
-        return AuthConfig.ACCOUNTS_APP_URL + '?logout=true&retUrl=' + encodedReturnUrl;
+        const retUrl = returnUrl || 'https://' + window.location.host;
+        const encodedReturnUrl = encodeURIComponent(retUrl);
+        return AuthConfig.AUTH_CONNECTOR_URL + '?logout=true&retUrl=' + encodedReturnUrl;
     };
 
     /**
@@ -329,12 +516,23 @@ const AuthService = (function() {
      * Clear session and redirect to logout
      */
     const logout = function(returnUrl) {
+        // Clear refresh timer
+        if (_refreshTimer) {
+            clearTimeout(_refreshTimer);
+            _refreshTimer = null;
+        }
+
         // Clear local state
         _memberInfo = null;
+        _currentToken = null;
+
+        // Dispatch logout event
+        dispatchEvent(Events.AUTH_LOGOUT, {});
 
         // Clear cookies (they're httpOnly so this may not work, but try)
         clearCookie(AuthConfig.COOKIE_NAME);
         clearCookie(AuthConfig.V3_COOKIE_NAME);
+        clearCookie(AuthConfig.REFRESH_COOKIE_NAME);
 
         // Redirect to logout URL
         window.location.href = generateLogoutUrl(returnUrl);
@@ -360,6 +558,17 @@ const AuthService = (function() {
      */
     const clearCookie = function(name) {
         document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    };
+
+    /**
+     * Dispatch custom authentication event
+     */
+    const dispatchEvent = function(eventName, detail) {
+        const event = new CustomEvent(eventName, {
+            bubbles: true,
+            detail: detail
+        });
+        document.dispatchEvent(event);
     };
 
     /**
@@ -462,9 +671,11 @@ const AuthService = (function() {
         init: init,
         isInitialized: function() { return _isInitialized; },
 
-        // Token management
+        // Token management (following tc-auth-lib API)
         getToken: getToken,
+        getFreshToken: getFreshToken,
         decodeToken: decodeToken,
+        isTokenExpired: isTokenExpired,
 
         // Authentication state
         isAuthenticated: isAuthenticated,
@@ -483,8 +694,9 @@ const AuthService = (function() {
         verifyWithBackend: verifyWithBackend,
         getMemberProfile: getMemberProfile,
 
-        // Error types for consumers
-        ErrorTypes: ErrorTypes
+        // Error types and events for consumers
+        ErrorTypes: ErrorTypes,
+        Events: Events
     };
 })();
 

@@ -1,6 +1,12 @@
 /**
  * Authentication UI Manager
  * Handles UI state updates based on authentication status
+ *
+ * Listens for authentication events and updates UI accordingly:
+ * - Loading state during authentication check
+ * - Unauthenticated state (login button)
+ * - Authenticated state (member handle + logout)
+ * - Error state with retry option
  */
 const AuthUI = (function() {
     'use strict';
@@ -32,11 +38,14 @@ const AuthUI = (function() {
         // Set up event listeners
         setupEventListeners();
 
+        // Listen for authentication events
+        setupAuthEventListeners();
+
         // Initialize authentication service
         showLoadingState();
 
         AuthService.init()
-            .then(function(success) {
+            .then(function() {
                 if (AuthService.isAuthenticated()) {
                     showAuthenticatedState(AuthService.getMemberInfo());
                 } else {
@@ -92,6 +101,50 @@ const AuthUI = (function() {
     };
 
     /**
+     * Set up listeners for authentication events from AuthService
+     */
+    const setupAuthEventListeners = function() {
+        // Listen for auth success
+        document.addEventListener(AuthService.Events.AUTH_SUCCESS, function(event) {
+            const memberInfo = event.detail && event.detail.memberInfo;
+            if (memberInfo) {
+                showAuthenticatedState(memberInfo);
+            }
+        });
+
+        // Listen for auth failure
+        document.addEventListener(AuthService.Events.AUTH_FAILURE, function(event) {
+            const error = event.detail && event.detail.error;
+            console.warn('Auth failure:', error);
+            showUnauthenticatedState();
+        });
+
+        // Listen for logout
+        document.addEventListener(AuthService.Events.AUTH_LOGOUT, function() {
+            showUnauthenticatedState();
+        });
+
+        // Listen for auth state changes (e.g., token expiration)
+        document.addEventListener(AuthService.Events.AUTH_STATE_CHANGE, function(event) {
+            if (event.detail && !event.detail.authenticated) {
+                showUnauthenticatedState();
+                // Show message if token expired
+                if (event.detail.reason === 'token_expired') {
+                    showErrorState('Session expired. Please log in again.');
+                }
+            }
+        });
+
+        // Listen for token refresh
+        document.addEventListener(AuthService.Events.TOKEN_REFRESHED, function() {
+            // Token refreshed successfully, update UI if needed
+            if (AuthService.isAuthenticated()) {
+                showAuthenticatedState(AuthService.getMemberInfo());
+            }
+        });
+    };
+
+    /**
      * Check if user just logged in (post-redirect)
      */
     const checkPostLoginState = function() {
@@ -111,6 +164,7 @@ const AuthUI = (function() {
      */
     const handleLogin = function(event) {
         event.preventDefault();
+        showLoadingState();
         AuthService.login();
     };
 
@@ -119,6 +173,7 @@ const AuthUI = (function() {
      */
     const handleLogout = function(event) {
         event.preventDefault();
+        showLoadingState();
         AuthService.logout();
     };
 
@@ -127,6 +182,8 @@ const AuthUI = (function() {
      */
     const handleRetry = function(event) {
         event.preventDefault();
+        // Reset initialization promise to allow retry
+        AuthService._initPromise = null;
         init();
     };
 
@@ -178,7 +235,7 @@ const AuthUI = (function() {
 
         // Update user icon with first letter of handle
         if (_elements.userIcon && memberInfo && memberInfo.handle) {
-            _elements.userIcon.textContent = memberInfo.handle.charAt(0);
+            _elements.userIcon.textContent = memberInfo.handle.charAt(0).toUpperCase();
         }
 
         // Update user handle display
