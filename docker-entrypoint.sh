@@ -10,9 +10,8 @@ WEBAPP_DIR="${JETTY_BASE}/webapps/ROOT"
 if [ -f "${JETTY_BASE}/webapps/ROOT.war" ] && [ ! -d "$WEBAPP_DIR" ]; then
     echo "Extracting WAR file..."
     mkdir -p "$WEBAPP_DIR"
-    cd "$WEBAPP_DIR"
-    unzip -q ../ROOT.war
-    rm ../ROOT.war
+    unzip -q "${JETTY_BASE}/webapps/ROOT.war" -d "$WEBAPP_DIR"
+    rm "${JETTY_BASE}/webapps/ROOT.war"
 fi
 
 # Generate environment config for frontend
@@ -39,6 +38,9 @@ EOF
 echo "Environment config generated:"
 cat "${WEBAPP_DIR}/js/env-config.js"
 
+# Change to JETTY_BASE before starting Jetty
+cd "${JETTY_BASE}"
+
 # Start Jetty
-echo "Starting Jetty..."
+echo "Starting Jetty from ${JETTY_BASE}..."
 exec java -jar /opt/jetty/start.jar
