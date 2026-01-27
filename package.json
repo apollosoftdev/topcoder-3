@@ -9,7 +9,7 @@
     "test": "mvn test",
     "test:frontend": "cd src/main/webapp && npm test",
     "test:backend": "mvn test -Dtest=*Test",
-    "docker:build": "docker build -t ai-arena .",
+    "docker:build": "DOCKER_BUILDKIT=1 docker build -t ai-arena .",
     "docker:run": "docker run -d --name ai-arena-app -p 8080:8080 -e ENVIRONMENT=development ai-arena",
     "docker:stop": "docker stop ai-arena-app && docker rm ai-arena-app",
     "docker:logs": "docker logs -f ai-arena-app",
