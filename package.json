@@ -1,0 +1,14 @@
+{
+  "name": "ai-arena",
+  "version": "1.0.0",
+  "description": "AI Arena Platform with Topcoder Authentication",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "cd src/main/webapp && npm test",
+    "docker:build": "docker build -t ai-arena .",
+    "docker:run": "docker run -p 8080:8080 -e ENVIRONMENT=development ai-arena"
+  },
+  "keywords": ["ai-arena", "topcoder", "authentication"],
+  "license": "UNLICENSED"
+}
