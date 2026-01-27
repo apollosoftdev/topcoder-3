@@ -52,9 +52,17 @@ ai-arena/
 
 ### Prerequisites
 
-- Java 17 or higher
-- Maven 3.8+
-- Node.js 18+ (for frontend tests)
+Choose based on how you want to run the app:
+
+| Run Method | Requirements |
+|------------|--------------|
+| **Docker** (Recommended) | Docker |
+| **Node.js Dev Server** | Node.js 18+ |
+| **Maven + Jetty** | Java 17+, Maven 3.8+ |
+
+For running tests:
+- Backend tests: Java 17+, Maven 3.8+
+- Frontend tests: Node.js 18+
 
 ### Build
 
@@ -222,16 +230,102 @@ if (AuthService.isAdmin()) {
 }
 ```
 
-## Local Development
+## Running the Application
 
-1. Set environment to development:
-   ```bash
-   export ENVIRONMENT=development
-   ```
+There are three ways to run the application locally:
 
-2. Deploy to local server (e.g., Tomcat, Jetty)
+### Option 1: Docker (Recommended)
 
-3. Access at `http://localhost:8080/`
+Full Java backend with Jetty server. Best for testing complete authentication flow.
+
+**Prerequisites:** Docker
+
+```bash
+# Build the Docker image
+docker build -t ai-arena .
+
+# Run the container
+docker run -d --name ai-arena-app -p 8080:8080 -e ENVIRONMENT=development ai-arena
+
+# View logs
+docker logs -f ai-arena-app
+
+# Stop the container
+docker stop ai-arena-app
+
+# Remove the container
+docker rm ai-arena-app
+```
+
+### Option 2: Node.js Dev Server
+
+Quick start with mock APIs. Good for frontend development.
+
+**Prerequisites:** Node.js 18+
+
+```bash
+# Start the dev server
+npm start
+# or
+node server.js
+```
+
+> **Note:** This runs a lightweight server with mock API responses. Authentication redirects will work but token validation is simulated.
+
+### Option 3: Maven + Jetty
+
+Native Java development with hot reload.
+
+**Prerequisites:** Java 17+, Maven 3.8+
+
+```bash
+# Run with Jetty plugin
+mvn jetty:run
+
+# Or build and deploy WAR
+mvn clean package
+# Deploy target/ai-arena-1.0.0-SNAPSHOT.war to your servlet container
+```
+
+### Access the Application
+
+Once running, access the app at:
+
+| Page | URL |
+|------|-----|
+| Home | http://localhost:8080/ |
+| Arena | http://localhost:8080/arena.html |
+| Admin | http://localhost:8080/admin.html |
+
+### API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/auth/status` | Check authentication status |
+| `GET /api/auth/member/{handle}` | Get member profile |
+| `POST /api/contestants/register` | Register for competition |
+| `GET /api/scores/leaderboard/{id}` | Get competition leaderboard |
+| `POST /api/scores/submit` | Submit a score |
+| `POST /api/progress/save` | Save progress checkpoint |
+
+### Container Management
+
+```bash
+# List running containers
+docker ps
+
+# Restart container
+docker restart ai-arena-app
+
+# View container logs (follow mode)
+docker logs -f ai-arena-app
+
+# Execute command inside container
+docker exec -it ai-arena-app bash
+
+# Remove all stopped containers
+docker container prune
+```
 
 ## Testing
 
