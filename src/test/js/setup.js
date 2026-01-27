@@ -60,9 +60,12 @@ const vm = require('vm');
 // Create a mock for AuthConfig
 global.AuthConfig = {
     ENV: 'development',
+    IS_LOCALHOST: true,
+    IS_LOCAL_TOPCODER: false,
     AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder-dev.com',
     AUTH_URL: 'https://accounts-auth0.topcoder-dev.com',
     ACCOUNTS_APP_URL: 'https://accounts.topcoder-dev.com',
+    AUTH0_CDN_URL: 'https://cdn.auth0.com',
     COOKIE_NAME: 'tcjwt',
     V3_COOKIE_NAME: 'v3jwt',
     REFRESH_COOKIE_NAME: 'tcrft',
@@ -84,10 +87,25 @@ global.AuthConfig = {
     }
 };
 
-// Helper to load JS file content
+// Cache for loaded modules to prevent re-declaration errors within same test
+let loadedModules = new Set();
+
+// Helper to load JS file content (only loads once per module per test run)
 global.loadModule = function(modulePath) {
+    if (loadedModules.has(modulePath)) {
+        return; // Already loaded in this test
+    }
+    loadedModules.add(modulePath);
+
     const fullPath = path.resolve(__dirname, '../../main/webapp', modulePath);
     const content = fs.readFileSync(fullPath, 'utf8');
     const script = new vm.Script(content);
     script.runInThisContext();
+};
+
+// Helper to reset modules (call in beforeEach for fresh state)
+global.resetModules = function() {
+    loadedModules = new Set();
+    delete global.AuthService;
+    delete global.AuthUI;
 };

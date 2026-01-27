@@ -41,6 +41,9 @@ describe('AuthService', () => {
     }, Math.floor(Date.now() / 1000) - 3600); // Expired 1 hour ago
 
     beforeEach(() => {
+        // Reset module cache for fresh load
+        global.resetModules();
+
         // Clear cookies
         global.clearCookies();
 

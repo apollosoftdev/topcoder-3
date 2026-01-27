@@ -7,6 +7,9 @@ describe('AuthUI', () => {
     let mockAuthService;
 
     beforeEach(() => {
+        // Reset module cache for fresh load
+        global.resetModules();
+
         // Clear cookies
         global.clearCookies();
 

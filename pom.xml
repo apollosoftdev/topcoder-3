@@ -187,6 +187,8 @@
                             <arguments>install</arguments>
                         </configuration>
                     </execution>
+                    <!-- Frontend tests run separately with: npm run test:frontend -->
+                    <!-- Uncomment to include in Maven build:
                     <execution>
                         <id>npm-test</id>
                         <goals>
@@ -197,6 +199,7 @@
                             <arguments>test</arguments>
                         </configuration>
                     </execution>
+                    -->
                 </executions>
             </plugin>
         </plugins>
