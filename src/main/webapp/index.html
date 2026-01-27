@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Arena</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <!-- tc-auth-lib Connector Iframe (hidden) -->
+    <iframe
+        id="tc-auth-connector"
+        src="https://accounts-auth0.topcoder.com/connector.html"
+        style="display: none;"
+        title="Authentication Connector">
+    </iframe>
+
+    <header class="main-header">
+        <div class="header-content">
+            <h1 class="logo">AI Arena</h1>
+            <nav class="main-nav">
+                <a href="arena.html">Arena</a>
+                <a href="admin.html">Admin</a>
+            </nav>
+            <div id="auth-container" class="auth-container">
+                <!-- Authentication UI will be injected here -->
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <section class="hero">
+            <h2>Welcome to AI Arena</h2>
+            <p>Compete, learn, and grow with AI challenges.</p>
+            <div class="cta-buttons">
+                <a href="arena.html" class="btn btn-primary">Enter Arena</a>
+                <a href="#learn-more" class="btn btn-secondary">Learn More</a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="main-footer">
+        <p>&copy; 2024 AI Arena. All rights reserved.</p>
+    </footer>
+
+    <!-- Authentication Scripts -->
+    <script src="js/auth/auth-config.js"></script>
+    <script src="js/auth/auth-service.js"></script>
+    <script src="js/auth/auth-ui.js"></script>
+    <script>
+        // Initialize authentication on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            AuthUI.init();
+        });
+    </script>
+</body>
+</html>

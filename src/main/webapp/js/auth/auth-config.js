@@ -1,0 +1,95 @@
+/**
+ * Topcoder Authentication Configuration
+ * Environment-specific configuration for tc-auth-lib integration
+ */
+const AuthConfig = (function() {
+    'use strict';
+
+    // Detect environment based on hostname
+    const getEnvironment = function() {
+        const hostname = window.location.hostname;
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return 'development';
+        }
+        if (hostname.includes('dev.') || hostname.includes('-dev')) {
+            return 'development';
+        }
+        return 'production';
+    };
+
+    const environments = {
+        development: {
+            AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder-dev.com',
+            AUTH_URL: 'https://accounts-auth0.topcoder-dev.com',
+            ACCOUNTS_APP_URL: 'https://accounts.topcoder-dev.com',
+            COOKIE_NAME: 'tcjwt',
+            V3_COOKIE_NAME: 'v3jwt',
+            REFRESH_COOKIE_NAME: 'tcrft',
+            TOKEN_EXPIRATION_OFFSET: 60, // seconds before expiration to refresh
+            API_BASE_URL: '/api'
+        },
+        production: {
+            AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder.com',
+            AUTH_URL: 'https://accounts-auth0.topcoder.com',
+            ACCOUNTS_APP_URL: 'https://accounts.topcoder.com',
+            COOKIE_NAME: 'tcjwt',
+            V3_COOKIE_NAME: 'v3jwt',
+            REFRESH_COOKIE_NAME: 'tcrft',
+            TOKEN_EXPIRATION_OFFSET: 60,
+            API_BASE_URL: '/api'
+        }
+    };
+
+    const currentEnv = getEnvironment();
+    const config = environments[currentEnv];
+
+    return {
+        // Current environment
+        ENV: currentEnv,
+
+        // Authentication URLs
+        AUTH_CONNECTOR_URL: config.AUTH_CONNECTOR_URL,
+        AUTH_URL: config.AUTH_URL,
+        ACCOUNTS_APP_URL: config.ACCOUNTS_APP_URL,
+
+        // Cookie configuration
+        COOKIE_NAME: config.COOKIE_NAME,
+        V3_COOKIE_NAME: config.V3_COOKIE_NAME,
+        REFRESH_COOKIE_NAME: config.REFRESH_COOKIE_NAME,
+
+        // Token configuration
+        TOKEN_EXPIRATION_OFFSET: config.TOKEN_EXPIRATION_OFFSET,
+
+        // API configuration
+        API_BASE_URL: config.API_BASE_URL,
+
+        // Topcoder claim namespaces (for V3 tokens)
+        CLAIMS_NAMESPACE: 'https://topcoder.com/claims/',
+
+        // Roles
+        ROLES: {
+            ADMIN: 'administrator',
+            USER: 'Topcoder User'
+        },
+
+        // Get full auth status endpoint URL
+        getAuthStatusUrl: function() {
+            return config.API_BASE_URL + '/auth/status';
+        },
+
+        // Get member profile endpoint URL
+        getMemberProfileUrl: function(handle) {
+            return config.API_BASE_URL + '/auth/member/' + encodeURIComponent(handle);
+        },
+
+        // Check if environment is development
+        isDevelopment: function() {
+            return currentEnv === 'development';
+        }
+    };
+})();
+
+// Export for module systems if available
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = AuthConfig;
+}
