@@ -1,0 +1,31 @@
+{
+  "name": "ai-arena-frontend",
+  "version": "1.0.0",
+  "description": "AI Arena Frontend with Topcoder Authentication",
+  "scripts": {
+    "test": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "roots": [
+      "../../test/js"
+    ],
+    "setupFiles": [
+      "../../test/js/setup.js"
+    ],
+    "collectCoverageFrom": [
+      "js/**/*.js"
+    ],
+    "testMatch": [
+      "**/*.test.js"
+    ],
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/js/$1"
+    }
+  }
+}
