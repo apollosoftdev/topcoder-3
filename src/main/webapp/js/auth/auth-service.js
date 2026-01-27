@@ -48,6 +48,25 @@ const AuthService = (function() {
 
         _initPromise = new Promise(function(resolve, reject) {
             try {
+                // On localhost, skip iframe connector to avoid CSP issues
+                // Use direct auth flow instead (redirect-based)
+                if (AuthConfig.IS_LOCALHOST) {
+                    console.log('Auth: Running on localhost, skipping iframe connector');
+                    _isInitialized = true;
+                    _connectorReady = false; // Iframe won't work on localhost
+                    // Check for existing token from cookie
+                    return checkExistingSession()
+                        .then(function(authenticated) {
+                            if (authenticated) {
+                                dispatchEvent(Events.AUTH_SUCCESS, { memberInfo: _memberInfo });
+                            }
+                            resolve(true);
+                        })
+                        .catch(function() {
+                            resolve(false);
+                        });
+                }
+
                 // Configure connector (following tc-auth-lib pattern)
                 configureConnector();
 
@@ -85,6 +104,12 @@ const AuthService = (function() {
      * Following tc-auth-lib configureConnector() pattern
      */
     const configureConnector = function() {
+        // Skip iframe on localhost to avoid CSP issues
+        if (AuthConfig.IS_LOCALHOST) {
+            console.log('Auth: Skipping iframe creation on localhost');
+            return;
+        }
+
         // Check if connector iframe already exists
         let connector = document.getElementById('tc-accounts-iframe');
         if (!connector) {

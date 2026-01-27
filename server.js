@@ -3,6 +3,7 @@
  * Serves static files and mocks API endpoints
  */
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -32,6 +33,70 @@ const CSP_HEADER = [
     "frame-src 'self' https://*.auth0.com https://*.topcoder.com https://*.topcoder-dev.com",
     "frame-ancestors 'self'"
 ].join('; ');
+
+// Proxy configuration for external services
+const PROXY_ROUTES = {
+    '/proxy/auth0': 'cdn.auth0.com',
+    '/proxy/topcoder-dev': 'accounts-auth0.topcoder-dev.com',
+    '/proxy/topcoder': 'accounts-auth0.topcoder.com'
+};
+
+// Handle proxy requests to external services
+function handleProxy(req, res) {
+    const url = new URL(req.url, `http://localhost:${PORT}`);
+
+    // Find matching proxy route
+    let targetHost = null;
+    let targetPath = url.pathname;
+
+    for (const [prefix, host] of Object.entries(PROXY_ROUTES)) {
+        if (url.pathname.startsWith(prefix)) {
+            targetHost = host;
+            targetPath = url.pathname.replace(prefix, '') || '/';
+            break;
+        }
+    }
+
+    if (!targetHost) {
+        res.writeHead(404);
+        res.end('Proxy route not found');
+        return;
+    }
+
+    const targetUrl = `https://${targetHost}${targetPath}${url.search}`;
+    console.log(`Proxying: ${req.url} -> ${targetUrl}`);
+
+    const proxyReq = https.request(targetUrl, {
+        method: req.method,
+        headers: {
+            ...req.headers,
+            host: targetHost
+        }
+    }, (proxyRes) => {
+        // Set CORS headers
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+        // Forward response headers (excluding problematic ones)
+        Object.entries(proxyRes.headers).forEach(([key, value]) => {
+            if (!['content-encoding', 'transfer-encoding', 'content-security-policy'].includes(key.toLowerCase())) {
+                res.setHeader(key, value);
+            }
+        });
+
+        res.writeHead(proxyRes.statusCode);
+        proxyRes.pipe(res);
+    });
+
+    proxyReq.on('error', (err) => {
+        console.error('Proxy error:', err.message);
+        res.writeHead(502);
+        res.end(JSON.stringify({ error: 'Proxy error', message: err.message }));
+    });
+
+    req.pipe(proxyReq);
+}
 
 // Mock data for API endpoints
 const mockContestants = new Map();
@@ -184,7 +249,19 @@ function handleStatic(req, res) {
 const server = http.createServer((req, res) => {
     console.log(`${req.method} ${req.url}`);
 
-    if (req.url.startsWith('/api/')) {
+    // Handle CORS preflight for all routes
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+
+    if (req.url.startsWith('/proxy/')) {
+        handleProxy(req, res);
+    } else if (req.url.startsWith('/api/')) {
         handleAPI(req, res);
     } else {
         handleStatic(req, res);

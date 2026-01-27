@@ -17,11 +17,18 @@ const AuthConfig = (function() {
         return 'production';
     };
 
+    // Check if running on localhost (use proxy)
+    const isLocalhost = window.location.hostname === 'localhost' ||
+                        window.location.hostname === '127.0.0.1';
+    const localOrigin = window.location.origin;
+
     const environments = {
         development: {
-            AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder-dev.com',
-            AUTH_URL: 'https://accounts-auth0.topcoder-dev.com',
+            // Use proxy when on localhost to avoid CSP issues
+            AUTH_CONNECTOR_URL: isLocalhost ? localOrigin + '/proxy/topcoder-dev' : 'https://accounts-auth0.topcoder-dev.com',
+            AUTH_URL: isLocalhost ? localOrigin + '/proxy/topcoder-dev' : 'https://accounts-auth0.topcoder-dev.com',
             ACCOUNTS_APP_URL: 'https://accounts.topcoder-dev.com',
+            AUTH0_CDN_URL: isLocalhost ? localOrigin + '/proxy/auth0' : 'https://cdn.auth0.com',
             COOKIE_NAME: 'tcjwt',
             V3_COOKIE_NAME: 'v3jwt',
             REFRESH_COOKIE_NAME: 'tcrft',
@@ -32,6 +39,7 @@ const AuthConfig = (function() {
             AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder.com',
             AUTH_URL: 'https://accounts-auth0.topcoder.com',
             ACCOUNTS_APP_URL: 'https://accounts.topcoder.com',
+            AUTH0_CDN_URL: 'https://cdn.auth0.com',
             COOKIE_NAME: 'tcjwt',
             V3_COOKIE_NAME: 'v3jwt',
             REFRESH_COOKIE_NAME: 'tcrft',
@@ -47,10 +55,14 @@ const AuthConfig = (function() {
         // Current environment
         ENV: currentEnv,
 
+        // Whether running on localhost (using proxy)
+        IS_LOCALHOST: isLocalhost,
+
         // Authentication URLs
         AUTH_CONNECTOR_URL: config.AUTH_CONNECTOR_URL,
         AUTH_URL: config.AUTH_URL,
         ACCOUNTS_APP_URL: config.ACCOUNTS_APP_URL,
+        AUTH0_CDN_URL: config.AUTH0_CDN_URL,
 
         // Cookie configuration
         COOKIE_NAME: config.COOKIE_NAME,
