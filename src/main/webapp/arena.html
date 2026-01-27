@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arena - AI Arena</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <!-- tc-auth-lib Connector Iframe (hidden) -->
+    <iframe
+        id="tc-auth-connector"
+        src="https://accounts-auth0.topcoder.com/connector.html"
+        style="display: none;"
+        title="Authentication Connector">
+    </iframe>
+
+    <header class="main-header">
+        <div class="header-content">
+            <h1 class="logo"><a href="index.html">AI Arena</a></h1>
+            <nav class="main-nav">
+                <a href="arena.html" class="active">Arena</a>
+                <a href="admin.html">Admin</a>
+            </nav>
+            <div id="auth-container" class="auth-container">
+                <!-- Loading State (shown initially) -->
+                <div id="auth-loading" class="auth-loading">
+                    <span class="auth-loading-spinner" aria-hidden="true"></span>
+                    <span>Loading...</span>
+                </div>
+
+                <!-- Error State (hidden by default) -->
+                <div id="auth-error" class="auth-error hidden">
+                    <span id="auth-error-message">Authentication error</span>
+                    <button id="auth-retry-btn" class="auth-error-retry" type="button">Retry</button>
+                </div>
+
+                <!-- Unauthenticated State (hidden by default) -->
+                <div id="auth-unauthenticated" class="hidden">
+                    <button id="login-btn" class="btn btn-login" type="button">
+                        <span class="icon icon-login" aria-hidden="true"></span>
+                        <span>Login</span>
+                    </button>
+                </div>
+
+                <!-- Authenticated State (hidden by default) -->
+                <div id="auth-authenticated" class="auth-user hidden">
+                    <span id="auth-user-icon" class="auth-user-icon" aria-hidden="true"></span>
+                    <span id="auth-user-handle" class="auth-user-handle"></span>
+                    <button id="logout-btn" class="btn btn-logout" type="button">
+                        <span class="icon icon-logout" aria-hidden="true"></span>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="arena-container">
+            <div class="arena-header">
+                <h2 class="arena-title">Competition Arena</h2>
+                <div class="arena-status">Active Competition</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Current Challenge</h3>
+                </div>
+                <p>Welcome to the AI Arena competition platform. Log in to participate in challenges and track your progress.</p>
+            </div>
+
+            <!-- Content for authenticated users -->
+            <div id="arena-authenticated-content" class="hidden">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Your Progress</h3>
+                    </div>
+                    <p id="arena-user-progress">Loading your progress...</p>
+                </div>
+            </div>
+
+            <!-- Prompt to login for unauthenticated users -->
+            <div id="arena-login-prompt" class="auth-required hidden">
+                <h3>Join the Competition</h3>
+                <p>Log in with your Topcoder account to participate and track your scores.</p>
+                <button id="arena-login-btn" class="btn btn-primary" type="button">
+                    Login to Participate
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="main-footer">
+        <p>&copy; 2024 AI Arena. All rights reserved.</p>
+    </footer>
+
+    <!-- Authentication Scripts -->
+    <script src="js/auth/auth-config.js"></script>
+    <script src="js/auth/auth-service.js"></script>
+    <script src="js/auth/auth-ui.js"></script>
+    <script>
+        // Initialize authentication on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            AuthUI.init();
+
+            // Arena page specific authentication handling
+            AuthUI.onAuthStateChange(function(isAuthenticated, memberInfo) {
+                const authenticatedContent = document.getElementById('arena-authenticated-content');
+                const loginPrompt = document.getElementById('arena-login-prompt');
+                const arenaLoginBtn = document.getElementById('arena-login-btn');
+
+                if (isAuthenticated && memberInfo) {
+                    authenticatedContent.classList.remove('hidden');
+                    loginPrompt.classList.add('hidden');
+
+                    // Update progress display
+                    const progressEl = document.getElementById('arena-user-progress');
+                    progressEl.textContent = 'Welcome back, ' + memberInfo.handle + '! Your competition data is loading...';
+                } else {
+                    authenticatedContent.classList.add('hidden');
+                    loginPrompt.classList.remove('hidden');
+                }
+
+                // Add click handler for arena login button
+                if (arenaLoginBtn) {
+                    arenaLoginBtn.addEventListener('click', function() {
+                        AuthService.login();
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
