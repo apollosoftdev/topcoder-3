@@ -3,11 +3,17 @@
   "version": "1.0.0",
   "description": "AI Arena Platform with Topcoder Authentication",
   "scripts": {
-    "start": "node server.js",
     "dev": "node server.js",
-    "test": "cd src/main/webapp && npm test",
+    "build": "mvn clean package -DskipTests",
+    "start": "mvn jetty:run -Djetty.port=8080",
+    "test": "mvn test",
+    "test:frontend": "cd src/main/webapp && npm test",
+    "test:backend": "mvn test -Dtest=*Test",
     "docker:build": "docker build -t ai-arena .",
-    "docker:run": "docker run -p 8080:8080 -e ENVIRONMENT=development ai-arena"
+    "docker:run": "docker run -d --name ai-arena-app -p 8080:8080 -e ENVIRONMENT=development ai-arena",
+    "docker:stop": "docker stop ai-arena-app && docker rm ai-arena-app",
+    "docker:logs": "docker logs -f ai-arena-app",
+    "clean": "mvn clean"
   },
   "keywords": ["ai-arena", "topcoder", "authentication"],
   "license": "UNLICENSED"
