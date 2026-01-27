@@ -227,21 +227,37 @@ const AuthService = (function() {
     /**
      * Request token refresh from connector iframe
      * Following tc-auth-lib proxyCall pattern
+     *
+     * Note: On localhost, iframe postMessage won't work due to cross-origin
+     * restrictions. Token refresh will fail silently - users must re-login
+     * when token expires. This is expected for local development.
      */
     const requestTokenRefresh = function() {
         return new Promise(function(resolve, reject) {
+            // Skip iframe refresh on localhost - cross-origin won't work
+            const isLocalhost = window.location.hostname === 'localhost' ||
+                                window.location.hostname === '127.0.0.1';
+
             const connector = document.getElementById('tc-accounts-iframe') ||
                               document.getElementById('tc-auth-connector');
 
             if (!connector || !connector.contentWindow) {
-                reject(new Error('Connector not available'));
+                if (isLocalhost) {
+                    resolve(null); // Silently fail on localhost
+                } else {
+                    reject(new Error('Connector not available'));
+                }
                 return;
             }
 
             const timeout = setTimeout(function() {
                 window.removeEventListener('message', handler);
-                reject(new Error('Token refresh timeout'));
-            }, 10000);
+                if (isLocalhost) {
+                    resolve(null); // Silently fail on localhost
+                } else {
+                    reject(new Error('Token refresh timeout'));
+                }
+            }, isLocalhost ? 3000 : 10000); // Shorter timeout on localhost
 
             const handler = function(event) {
                 // Validate origin
@@ -280,8 +296,15 @@ const AuthService = (function() {
             window.addEventListener('message', handler);
 
             // Send refresh request (tc-auth-lib format)
-            const payload = { type: 'REFRESH_TOKEN' };
-            connector.contentWindow.postMessage(payload, AuthConfig.AUTH_CONNECTOR_URL);
+            try {
+                const payload = { type: 'REFRESH_TOKEN' };
+                connector.contentWindow.postMessage(payload, AuthConfig.AUTH_CONNECTOR_URL);
+            } catch (e) {
+                // postMessage may fail on localhost due to cross-origin
+                if (!isLocalhost) {
+                    console.warn('Token refresh postMessage failed:', e.message);
+                }
+            }
         });
     };
 
