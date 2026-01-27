@@ -73,12 +73,23 @@ npm test
 
 ### Configuration
 
+#### Quick Start
+
+Copy the example environment file and configure:
+
+```bash
+cp .env.example .env
+# Edit .env with your settings
+```
+
 #### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ENVIRONMENT` | Environment mode (development/production) | production |
 | `TC_AUTH_SECRET` | HS256 secret for V2 token validation | - |
+
+See `.env.example` for all available configuration options.
 
 #### Auth Properties
 
