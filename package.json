@@ -7,7 +7,7 @@
   "private": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/topcoder-platform/ai-arena.git"
+    "url": "https://github.com/apollosoftdev/topcoder-3.git"
   },
   "engines": {
     "node": ">=18.0.0"
