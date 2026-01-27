@@ -14,6 +14,7 @@
   },
   "scripts": {
     "dev": "node server.js",
+    "dev:https": "USE_HTTPS=true node server.js",
     "build": "mvn clean package -DskipTests",
     "start": "mvn jetty:run -Djetty.port=8080",
     "test": "mvn test",

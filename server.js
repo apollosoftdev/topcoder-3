@@ -1,14 +1,24 @@
 /**
  * Simple development server for AI Arena frontend
  * Serves static files and mocks API endpoints
+ *
+ * Supports HTTPS for local.topcoder-dev.com development
  */
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || 8080;
+// Configuration
+const HTTP_PORT = process.env.PORT || 8080;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
+const USE_HTTPS = process.env.USE_HTTPS === 'true' || process.argv.includes('--https');
 const WEBAPP_DIR = path.join(__dirname, 'src/main/webapp');
+const SSL_DIR = path.join(__dirname, 'ssl');
+
+// SSL certificate paths
+const SSL_KEY = path.join(SSL_DIR, 'local.topcoder-dev.com.key');
+const SSL_CERT = path.join(SSL_DIR, 'local.topcoder-dev.com.crt');
 
 // MIME types
 const MIME_TYPES = {
@@ -245,8 +255,8 @@ function handleStatic(req, res) {
     });
 }
 
-// Create server
-const server = http.createServer((req, res) => {
+// Request handler
+function requestHandler(req, res) {
     console.log(`${req.method} ${req.url}`);
 
     // Handle CORS preflight for all routes
@@ -266,22 +276,84 @@ const server = http.createServer((req, res) => {
     } else {
         handleStatic(req, res);
     }
-});
+}
 
-server.listen(PORT, () => {
-    console.log(`
+// Start server
+function startServer() {
+    if (USE_HTTPS) {
+        // Check if SSL certificates exist
+        if (!fs.existsSync(SSL_KEY) || !fs.existsSync(SSL_CERT)) {
+            console.error('SSL certificates not found. Run:');
+            console.error('  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \\');
+            console.error('    -keyout ssl/local.topcoder-dev.com.key \\');
+            console.error('    -out ssl/local.topcoder-dev.com.crt \\');
+            console.error('    -subj "/CN=local.topcoder-dev.com"');
+            process.exit(1);
+        }
+
+        const httpsOptions = {
+            key: fs.readFileSync(SSL_KEY),
+            cert: fs.readFileSync(SSL_CERT)
+        };
+
+        const server = https.createServer(httpsOptions, requestHandler);
+
+        server.listen(HTTPS_PORT, () => {
+            console.log(`
+╔════════════════════════════════════════════════════════════╗
+║              AI Arena Dev Server (HTTPS)                   ║
+╠════════════════════════════════════════════════════════════╣
+║  Server running at: https://local.topcoder-dev.com        ║
+║                                                            ║
+║  Pages:                                                    ║
+║    - Home:  https://local.topcoder-dev.com/                ║
+║    - Arena: https://local.topcoder-dev.com/arena.html      ║
+║    - Admin: https://local.topcoder-dev.com/admin.html      ║
+║                                                            ║
+║  Note: Add to /etc/hosts:                                  ║
+║    127.0.0.1    local.topcoder-dev.com                     ║
+║                                                            ║
+║  Trust the certificate in your browser to avoid warnings.  ║
+╚════════════════════════════════════════════════════════════╝
+`);
+        });
+
+        server.on('error', (err) => {
+            if (err.code === 'EACCES') {
+                console.error(`Port ${HTTPS_PORT} requires elevated permissions.`);
+                console.error('Run with: sudo npm run dev:https');
+                console.error('Or allow node to bind to low ports:');
+                console.error("  sudo setcap 'cap_net_bind_service=+ep' $(which node)");
+            } else {
+                console.error('Server error:', err.message);
+            }
+            process.exit(1);
+        });
+    } else {
+        // HTTP server
+        const server = http.createServer(requestHandler);
+
+        server.listen(HTTP_PORT, () => {
+            console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                    AI Arena Dev Server                     ║
 ╠════════════════════════════════════════════════════════════╣
-║  Server running at: http://localhost:${PORT}                  ║
+║  Server running at: http://localhost:${HTTP_PORT}                  ║
 ║                                                            ║
 ║  Pages:                                                    ║
-║    - Home:  http://localhost:${PORT}/                         ║
-║    - Arena: http://localhost:${PORT}/arena.html               ║
-║    - Admin: http://localhost:${PORT}/admin.html               ║
+║    - Home:  http://localhost:${HTTP_PORT}/                         ║
+║    - Arena: http://localhost:${HTTP_PORT}/arena.html               ║
+║    - Admin: http://localhost:${HTTP_PORT}/admin.html               ║
+║                                                            ║
+║  For HTTPS mode (Topcoder auth), run:                      ║
+║    sudo npm run dev:https                                  ║
 ║                                                            ║
 ║  Note: This is a dev server with mock APIs.                ║
 ║  For full functionality, use Docker or install Java/Maven. ║
 ╚════════════════════════════════════════════════════════════╝
 `);
-});
+        });
+    }
+}
+
+startServer();

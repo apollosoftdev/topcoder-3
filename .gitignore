@@ -21,6 +21,11 @@ temp/
 .env
 .env.local
 
+# SSL certificates (generated locally)
+ssl/*.key
+ssl/*.crt
+ssl/*.pem
+
 # Coverage
 coverage/
 .nyc_output/
