@@ -13,8 +13,8 @@ AI Arena competition platform with Topcoder authentication integration.
 ### Using Docker (Recommended)
 
 ```bash
-docker build -t ai-arena .
-docker run -d --name ai-arena-app -p 8080:8080 -e ENVIRONMENT=development ai-arena
+npm run docker:build
+npm run docker:run
 ```
 
 ### Using npm
@@ -41,7 +41,9 @@ npm start
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `ENVIRONMENT` | `development` or `production` | `production` |
-| `TC_AUTH_SECRET` | HS256 secret for V2 tokens | - |
+| `TC_AUTH_SECRET` | HS256 secret for V2 tokens (optional) | - |
+
+> **Note:** `TC_AUTH_SECRET` is only needed for V2 (HS256) tokens. V3 (RS256) tokens use public JWKS - no secret required. For development, you can skip this.
 
 ### Development vs Production
 
