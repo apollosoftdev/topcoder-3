@@ -30,20 +30,41 @@ RUN apt-get update && apt-get install -y curl && \
     useradd -m jetty && \
     rm -rf /var/lib/apt/lists/*
 
-# Setup Jetty base
+# Setup Jetty base with HTTP and HTTPS support
 ENV JETTY_BASE=/var/lib/jetty
-RUN mkdir -p ${JETTY_BASE}/webapps && \
+RUN mkdir -p ${JETTY_BASE}/webapps ${JETTY_BASE}/ssl && \
     cd ${JETTY_BASE} && \
-    java -jar ${JETTY_HOME}/start.jar --add-modules=server,http,deploy,webapp,jsp
+    java -jar ${JETTY_HOME}/start.jar --add-modules=server,http,https,ssl,deploy,webapp,jsp
 
 # Copy WAR file
 COPY --from=build /app/target/*.war ${JETTY_BASE}/webapps/ROOT.war
 
+# Copy SSL certificates (optional - mount at runtime if not present)
+COPY ssl/local.topcoder-dev.com.* ${JETTY_BASE}/ssl/
+
+# Create keystore from certificates
+RUN if [ -f ${JETTY_BASE}/ssl/local.topcoder-dev.com.crt ]; then \
+    openssl pkcs12 -export -in ${JETTY_BASE}/ssl/local.topcoder-dev.com.crt \
+        -inkey ${JETTY_BASE}/ssl/local.topcoder-dev.com.key \
+        -out ${JETTY_BASE}/ssl/keystore.p12 \
+        -name jetty -password pass:changeit && \
+    keytool -importkeystore -srckeystore ${JETTY_BASE}/ssl/keystore.p12 \
+        -srcstoretype PKCS12 -srcstorepass changeit \
+        -destkeystore ${JETTY_BASE}/ssl/keystore.jks \
+        -deststorepass changeit -noprompt; \
+    fi
+
+# Configure Jetty SSL
+RUN echo "jetty.ssl.port=443" >> ${JETTY_BASE}/start.d/ssl.ini && \
+    echo "jetty.sslContext.keyStorePath=ssl/keystore.jks" >> ${JETTY_BASE}/start.d/ssl.ini && \
+    echo "jetty.sslContext.keyStorePassword=changeit" >> ${JETTY_BASE}/start.d/ssl.ini && \
+    echo "jetty.sslContext.keyManagerPassword=changeit" >> ${JETTY_BASE}/start.d/ssl.ini
+
 # Environment
-ENV ENVIRONMENT=development
+ENV ENVIRONMENT=production
 ENV PORT=8080
 
-EXPOSE 8080
+EXPOSE 8080 443
 
 # Run Jetty
 WORKDIR ${JETTY_BASE}

@@ -27,11 +27,11 @@ const AuthConfig = (function() {
 
     const environments = {
         // Local development with local.topcoder-dev.com (HTTPS)
-        // Uses dev auth URLs - the domain is in topcoder-dev.com trusted list
+        // Uses production auth URLs to avoid CSP issues on dev auth
         local: {
-            AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder-dev.com',
-            AUTH_URL: 'https://accounts-auth0.topcoder-dev.com',
-            ACCOUNTS_APP_URL: 'https://accounts.topcoder-dev.com',
+            AUTH_CONNECTOR_URL: 'https://accounts-auth0.topcoder.com',
+            AUTH_URL: 'https://accounts-auth0.topcoder.com',
+            ACCOUNTS_APP_URL: 'https://accounts.topcoder.com',
             AUTH0_CDN_URL: 'https://cdn.auth0.com',
             COOKIE_NAME: 'tcjwt',
             V3_COOKIE_NAME: 'v3jwt',
