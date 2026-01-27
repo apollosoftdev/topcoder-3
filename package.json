@@ -1,7 +1,17 @@
 {
   "name": "ai-arena",
   "version": "1.0.0",
-  "description": "AI Arena Platform with Topcoder Authentication",
+  "description": "AI Arena Platform with Topcoder Authentication Integration",
+  "author": "Topcoder",
+  "license": "UNLICENSED",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/topcoder-platform/ai-arena.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "node server.js",
     "build": "mvn clean package -DskipTests",
@@ -15,6 +25,11 @@
     "docker:logs": "docker logs -f ai-arena-app",
     "clean": "mvn clean"
   },
-  "keywords": ["ai-arena", "topcoder", "authentication"],
-  "license": "UNLICENSED"
+  "keywords": [
+    "ai-arena",
+    "topcoder",
+    "authentication",
+    "jwt",
+    "tc-auth-lib"
+  ]
 }
