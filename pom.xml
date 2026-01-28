@@ -11,21 +11,36 @@
 
     <name>AI Arena</name>
     <description>AI Arena Platform with Topcoder Authentication Integration</description>
+    <url>https://github.com/topcoder-platform/ai-arena</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <jersey.version>3.1.3</jersey.version>
+        <!-- Updated versions to fix vulnerabilities -->
+        <jersey.version>3.1.5</jersey.version>
         <java-jwt.version>4.4.0</java-jwt.version>
-        <junit.version>5.10.0</junit.version>
-        <mockito.version>5.5.0</mockito.version>
-        <node.version>v18.18.0</node.version>
-        <npm.version>9.8.1</npm.version>
+        <jackson.version>2.16.1</jackson.version>
+        <slf4j.version>2.0.11</slf4j.version>
+        <logback.version>1.4.14</logback.version>
+        <junit.version>5.10.1</junit.version>
+        <mockito.version>5.8.0</mockito.version>
+        <node.version>v18.19.0</node.version>
+        <npm.version>10.2.3</npm.version>
+        <!-- Skip frontend plugin by default (IDE builds), use -Dskip.frontend=false to enable -->
+        <skip.frontend>true</skip.frontend>
     </properties>
 
     <dependencies>
-        <!-- Jakarta EE API -->
+        <!-- Jakarta EE API (EPL-2.0 / GPL-2.0 with classpath exception - permissive) -->
         <dependency>
             <groupId>jakarta.servlet</groupId>
             <artifactId>jakarta.servlet-api</artifactId>
@@ -33,7 +48,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Jersey JAX-RS Implementation -->
+        <!-- Jersey JAX-RS Implementation (EPL-2.0 / GPL-2.0 with classpath exception) -->
         <dependency>
             <groupId>org.glassfish.jersey.containers</groupId>
             <artifactId>jersey-container-servlet</artifactId>
@@ -50,7 +65,7 @@
             <version>${jersey.version}</version>
         </dependency>
 
-        <!-- JWT Token Validation -->
+        <!-- JWT Token Validation (MIT License) -->
         <dependency>
             <groupId>com.auth0</groupId>
             <artifactId>java-jwt</artifactId>
@@ -62,26 +77,36 @@
             <version>0.22.1</version>
         </dependency>
 
-        <!-- JSON Processing -->
+        <!-- JSON Processing (Apache-2.0) -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.15.2</version>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <version>${jackson.version}</version>
         </dependency>
 
-        <!-- Logging -->
+        <!-- Logging (MIT / LGPL-2.1) -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>2.0.9</version>
+            <version>${slf4j.version}</version>
         </dependency>
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.4.11</version>
+            <version>${logback.version}</version>
         </dependency>
 
-        <!-- Testing -->
+        <!-- Testing (EPL-2.0 / MIT) -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -119,7 +144,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.12.1</version>
                 <configuration>
                     <source>17</source>
                     <target>17</target>
@@ -138,7 +163,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.1.2</version>
+                <version>3.2.3</version>
             </plugin>
 
             <!-- Jetty Plugin for running the application -->
@@ -159,15 +184,16 @@
                 </configuration>
             </plugin>
 
-            <!-- Frontend Maven Plugin for npm/Jest -->
+            <!-- Frontend Maven Plugin for npm/Jest (disabled by default, use -Pfrontend to enable) -->
             <plugin>
                 <groupId>com.github.eirslett</groupId>
                 <artifactId>frontend-maven-plugin</artifactId>
-                <version>1.14.0</version>
+                <version>1.15.0</version>
                 <configuration>
                     <workingDirectory>src/main/webapp</workingDirectory>
                     <nodeVersion>${node.version}</nodeVersion>
                     <npmVersion>${npm.version}</npmVersion>
+                    <skip>${skip.frontend}</skip>
                 </configuration>
                 <executions>
                     <execution>
@@ -187,20 +213,27 @@
                             <arguments>install</arguments>
                         </configuration>
                     </execution>
-                    <!-- Frontend tests run separately with: npm run test:frontend -->
-                    <!-- Uncomment to include in Maven build:
-                    <execution>
-                        <id>npm-test</id>
-                        <goals>
-                            <goal>npm</goal>
-                        </goals>
-                        <phase>test</phase>
-                        <configuration>
-                            <arguments>test</arguments>
-                        </configuration>
-                    </execution>
-                    -->
                 </executions>
+            </plugin>
+
+            <!-- License plugin to track dependencies -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>license-maven-plugin</artifactId>
+                <version>2.3.0</version>
+                <configuration>
+                    <licenseName>apache_v2</licenseName>
+                </configuration>
+            </plugin>
+
+            <!-- OWASP Dependency Check for vulnerability scanning -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>9.0.7</version>
+                <configuration>
+                    <failBuildOnCVSS>7</failBuildOnCVSS>
+                </configuration>
             </plugin>
         </plugins>
     </build>

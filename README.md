@@ -525,6 +525,47 @@ src/main/
 
 ---
 
+## Security
+
+### Vulnerability Scanning
+
+This project includes security scanning configuration:
+
+- **OWASP Dependency Check**: Run `mvn org.owasp:dependency-check-maven:check` to scan for vulnerable dependencies
+- **Docker Security**: Container runs as non-root user with health checks enabled
+- **Input Validation**: All user inputs validated with regex patterns
+
+### Security Best Practices
+
+| Practice | Implementation |
+|----------|----------------|
+| Non-root container | `USER jetty` in Dockerfile |
+| Health checks | Docker HEALTHCHECK directive |
+| Pinned versions | Specific image/dependency versions |
+| CORS validation | Whitelist-based origin checking |
+| Token validation | Signature verification required |
+| Input sanitization | Regex pattern validation |
+
+### Reporting Security Issues
+
+Please report security vulnerabilities to [security@topcoder.com](mailto:security@topcoder.com).
+
+---
+
 ## License
 
-Copyright 2024 AI Arena. All rights reserved.
+Copyright 2024 AI Arena / Topcoder
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+See the [LICENSE](LICENSE) file for details.

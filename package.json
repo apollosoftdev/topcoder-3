@@ -2,13 +2,17 @@
   "name": "ai-arena",
   "version": "1.0.0",
   "description": "AI Arena Platform with Topcoder Authentication Integration",
-  "author": "apollosoftdev",
-  "license": "UNLICENSED",
+  "author": "Topcoder",
+  "license": "Apache-2.0",
   "private": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/apollosoftdev/topcoder-3.git"
+    "url": "https://github.com/topcoder-platform/ai-arena.git"
   },
+  "bugs": {
+    "url": "https://github.com/topcoder-platform/ai-arena/issues"
+  },
+  "homepage": "https://github.com/topcoder-platform/ai-arena#readme",
   "engines": {
     "node": ">=18.0.0"
   },
