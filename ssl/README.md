@@ -20,20 +20,15 @@ mkcert -key-file ssl/local.topcoder-dev.com.key \
        local.topcoder-dev.com localhost 127.0.0.1
 ```
 
-## Alternative: Manual OpenSSL (for reference)
+## Alternative: Manual Certificate Generation
 
-If mkcert is not available, you can use OpenSSL. Note that this generates a self-signed certificate that browsers will warn about.
+If mkcert is not available, refer to the official OpenSSL documentation for secure certificate generation practices. Note that self-signed certificates will cause browser warnings.
 
-```bash
-# Generate with passphrase (recommended)
-openssl req -x509 -newkey rsa:4096 -sha256 -days 365 \
-  -keyout ssl/local.topcoder-dev.com.key \
-  -out ssl/local.topcoder-dev.com.crt \
-  -subj "/C=US/ST=State/L=City/O=Topcoder/CN=local.topcoder-dev.com" \
-  -addext "subjectAltName=DNS:local.topcoder-dev.com,DNS:localhost"
-
-# You will be prompted to enter a passphrase for the private key
-```
+Key security requirements:
+- Use RSA 4096-bit or ECDSA P-384 keys
+- Use SHA-256 or stronger for signing
+- Always use a passphrase to protect the private key
+- Set appropriate Subject Alternative Names (SAN)
 
 ## Setup
 

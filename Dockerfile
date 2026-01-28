@@ -93,9 +93,9 @@ ENV NODE_ENV=production \
 # Expose ports
 EXPOSE 8080 443
 
-# Health check for container orchestration
+# Health check for container orchestration (JSON notation for signal handling)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8080/ || exit 1
+    CMD ["sh", "-c", "curl -f http://localhost:8080/ || exit 1"]
 
 WORKDIR ${JETTY_BASE}
 

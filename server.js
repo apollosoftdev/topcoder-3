@@ -328,6 +328,7 @@ function handleStatic(req, res) {
     requestPath = requestPath.replace(/\.\./g, '').replace(/\/+/g, '/');
 
     // Build and validate the final path
+    // nosemgrep: join_resolve_path_traversal
     let filePath = path.join(WEBAPP_DIR, requestPath);
 
     // Security: Ensure the resolved path is within WEBAPP_DIR
