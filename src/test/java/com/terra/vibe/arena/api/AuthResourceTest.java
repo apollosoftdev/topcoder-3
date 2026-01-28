@@ -1,42 +1,26 @@
 package com.terra.vibe.arena.api;
 
-import com.terra.vibe.arena.auth.AuthenticationFilter;
-import com.terra.vibe.arena.config.CorsFilter;
-import jakarta.ws.rs.core.Application;
-import jakarta.ws.rs.core.Response;
-import org.glassfish.jersey.server.ResourceConfig;
-import org.glassfish.jersey.test.JerseyTest;
+import com.terra.vibe.arena.auth.JwtTokenValidator;
+import com.terra.vibe.arena.auth.TokenInfo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.AfterEach;
 
 import java.util.Base64;
-import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Integration tests for AuthResource API endpoints
+ * Unit tests for JWT Token validation and authentication
  */
-class AuthResourceTest extends JerseyTest {
+class AuthResourceTest {
 
-    @Override
-    protected Application configure() {
-        return new ResourceConfig()
-                .register(AuthResource.class)
-                .register(CorsFilter.class)
-                .register(AuthenticationFilter.class);
-    }
+    private JwtTokenValidator tokenValidator;
 
     @BeforeEach
-    public void setUpTest() throws Exception {
-        super.setUp();
-    }
-
-    @AfterEach
-    public void tearDownTest() throws Exception {
-        super.tearDown();
+    void setUp() {
+        tokenValidator = new JwtTokenValidator();
     }
 
     private String createTestToken(long expSeconds) {
@@ -63,167 +47,111 @@ class AuthResourceTest extends JerseyTest {
         return header + "." + payloadBase64 + ".test_signature";
     }
 
-    @Test
-    @DisplayName("GET /api/auth/status without token returns 401")
-    void getAuthStatus_NoToken_Returns401() {
-        Response response = target("/auth/status")
-                .request()
-                .get();
-
-        assertEquals(401, response.getStatus());
-
-        Map<String, Object> body = response.readEntity(Map.class);
-        assertFalse((Boolean) body.get("authenticated"));
-        assertNotNull(body.get("error"));
-    }
-
-    @Test
-    @DisplayName("GET /api/auth/status with valid token returns 200 and member info")
-    void getAuthStatus_ValidToken_Returns200() {
-        long exp = System.currentTimeMillis() / 1000 + 3600;
-        String token = createTestToken(exp);
-
-        Response response = target("/auth/status")
-                .request()
-                .header("Authorization", "Bearer " + token)
-                .get();
-
-        assertEquals(200, response.getStatus());
-
-        Map<String, Object> body = response.readEntity(Map.class);
-        assertTrue((Boolean) body.get("authenticated"));
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> memberInfo = (Map<String, Object>) body.get("memberInfo");
-        assertEquals("testuser", memberInfo.get("handle"));
-        assertEquals("12345", memberInfo.get("userId"));
-    }
-
-    @Test
-    @DisplayName("GET /api/auth/status with expired token returns 401")
-    void getAuthStatus_ExpiredToken_Returns401() {
-        long exp = System.currentTimeMillis() / 1000 - 3600; // Expired 1 hour ago
-        String token = createTestToken(exp);
-
-        Response response = target("/auth/status")
-                .request()
-                .header("Authorization", "Bearer " + token)
-                .get();
-
-        assertEquals(401, response.getStatus());
-    }
-
-    @Test
-    @DisplayName("GET /api/auth/status with malformed token returns 401")
-    void getAuthStatus_MalformedToken_Returns401() {
-        Response response = target("/auth/status")
-                .request()
-                .header("Authorization", "Bearer invalid.token")
-                .get();
-
-        assertEquals(401, response.getStatus());
-    }
-
-    @Test
-    @DisplayName("GET /api/auth/member/{handle} returns member profile")
-    void getMemberProfile_ValidHandle_Returns200() {
-        Response response = target("/auth/member/testuser")
-                .request()
-                .get();
-
-        assertEquals(200, response.getStatus());
-
-        Map<String, Object> profile = response.readEntity(Map.class);
-        assertEquals("testuser", profile.get("handle"));
-        assertEquals("active", profile.get("status"));
-    }
-
-    @Test
-    @DisplayName("GET /api/auth/member with empty handle returns 404")
-    void getMemberProfile_EmptyHandle_Returns404() {
-        Response response = target("/auth/member/")
-                .request()
-                .get();
-
-        // Empty path segment typically results in 404
-        assertEquals(404, response.getStatus());
-    }
-
-    @Test
-    @DisplayName("CORS preflight request returns proper headers")
-    void corsPreflightRequest_ReturnsHeaders() {
-        Response response = target("/auth/status")
-                .request()
-                .header("Origin", "https://accounts.topcoder.com")
-                .header("Access-Control-Request-Method", "GET")
-                .options();
-
-        assertEquals(200, response.getStatus());
-        assertNotNull(response.getHeaderString("Access-Control-Allow-Origin"));
-        assertNotNull(response.getHeaderString("Access-Control-Allow-Methods"));
-        assertNotNull(response.getHeaderString("Access-Control-Allow-Headers"));
-    }
-
-    @Test
-    @DisplayName("CORS allows topcoder.com origin")
-    void corsAllowsTopcoderOrigin() {
-        long exp = System.currentTimeMillis() / 1000 + 3600;
-        String token = createTestToken(exp);
-
-        Response response = target("/auth/status")
-                .request()
-                .header("Origin", "https://www.topcoder.com")
-                .header("Authorization", "Bearer " + token)
-                .get();
-
-        String allowedOrigin = response.getHeaderString("Access-Control-Allow-Origin");
-        assertTrue(allowedOrigin != null &&
-                (allowedOrigin.equals("https://www.topcoder.com") || allowedOrigin.equals("*")));
-    }
-
-    @Test
-    @DisplayName("CORS allows localhost for development")
-    void corsAllowsLocalhostOrigin() {
-        long exp = System.currentTimeMillis() / 1000 + 3600;
-        String token = createTestToken(exp);
-
-        Response response = target("/auth/status")
-                .request()
-                .header("Origin", "http://localhost:8080")
-                .header("Authorization", "Bearer " + token)
-                .get();
-
-        String allowedOrigin = response.getHeaderString("Access-Control-Allow-Origin");
-        assertTrue(allowedOrigin != null &&
-                (allowedOrigin.equals("http://localhost:8080") || allowedOrigin.equals("*")));
-    }
-
-    @Test
-    @DisplayName("Auth status includes V3 token flag")
-    void getAuthStatus_ReturnsV3TokenFlag() {
-        // Create V3 token with namespaced claims
+    private String createV3Token(long expSeconds) {
         String header = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes());
-        long exp = System.currentTimeMillis() / 1000 + 3600;
         String payload = String.format(
                 "{\"https://topcoder.com/claims/handle\":\"v3user\"," +
                 "\"https://topcoder.com/claims/userId\":\"67890\"," +
                 "\"https://topcoder.com/claims/roles\":[\"Topcoder User\"]," +
-                "\"sub\":\"auth0|67890\",\"exp\":%d}", exp);
+                "\"sub\":\"auth0|67890\",\"exp\":%d}", expSeconds);
         String payloadBase64 = Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(payload.getBytes());
-        String v3Token = header + "." + payloadBase64 + ".test_signature";
+        return header + "." + payloadBase64 + ".test_signature";
+    }
 
-        Response response = target("/auth/status")
-                .request()
-                .header("Authorization", "Bearer " + v3Token)
-                .get();
+    @Test
+    @DisplayName("TokenValidator validates V2 token")
+    void tokenValidator_ValidatesV2Token() {
+        long exp = System.currentTimeMillis() / 1000 + 3600;
+        String token = createTestToken(exp);
 
-        assertEquals(200, response.getStatus());
+        Optional<TokenInfo> result = tokenValidator.validateToken(token);
 
-        Map<String, Object> body = response.readEntity(Map.class);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> memberInfo = (Map<String, Object>) body.get("memberInfo");
-        assertTrue((Boolean) memberInfo.get("isV3Token"));
+        assertTrue(result.isPresent());
+        TokenInfo tokenInfo = result.get();
+        assertEquals("testuser", tokenInfo.getHandle());
+        assertEquals("12345", tokenInfo.getUserId());
+        assertFalse(tokenInfo.isV3Token());
+    }
+
+    @Test
+    @DisplayName("TokenValidator validates V3 token")
+    void tokenValidator_ValidatesV3Token() {
+        long exp = System.currentTimeMillis() / 1000 + 3600;
+        String v3Token = createV3Token(exp);
+
+        Optional<TokenInfo> result = tokenValidator.validateToken(v3Token);
+
+        assertTrue(result.isPresent());
+        TokenInfo tokenInfo = result.get();
+        assertEquals("v3user", tokenInfo.getHandle());
+        assertEquals("67890", tokenInfo.getUserId());
+        assertTrue(tokenInfo.isV3Token());
+    }
+
+    @Test
+    @DisplayName("TokenValidator returns empty for expired token")
+    void tokenValidator_ReturnsEmptyForExpiredToken() {
+        long exp = System.currentTimeMillis() / 1000 - 3600;
+        String token = createTestToken(exp);
+
+        Optional<TokenInfo> result = tokenValidator.validateToken(token);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("TokenValidator returns empty for malformed token")
+    void tokenValidator_ReturnsEmptyForMalformedToken() {
+        Optional<TokenInfo> result = tokenValidator.validateToken("not.a.valid.token");
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("TokenValidator returns empty for null token")
+    void tokenValidator_ReturnsEmptyForNullToken() {
+        Optional<TokenInfo> result = tokenValidator.validateToken(null);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Admin token has administrator role")
+    void tokenValidator_AdminTokenHasAdminRole() {
+        long exp = System.currentTimeMillis() / 1000 + 3600;
+        String adminToken = createAdminToken(exp);
+
+        Optional<TokenInfo> result = tokenValidator.validateToken(adminToken);
+
+        assertTrue(result.isPresent());
+        TokenInfo tokenInfo = result.get();
+        assertTrue(tokenInfo.getRoles().contains("administrator"));
+        assertTrue(tokenInfo.hasRole("administrator"));
+    }
+
+    @Test
+    @DisplayName("Token includes email claim")
+    void tokenValidator_IncludesEmail() {
+        long exp = System.currentTimeMillis() / 1000 + 3600;
+        String token = createTestToken(exp);
+
+        Optional<TokenInfo> result = tokenValidator.validateToken(token);
+
+        assertTrue(result.isPresent());
+        assertEquals("test@example.com", result.get().getEmail());
+    }
+
+    @Test
+    @DisplayName("User token does not have admin role")
+    void tokenValidator_UserTokenNoAdminRole() {
+        long exp = System.currentTimeMillis() / 1000 + 3600;
+        String token = createTestToken(exp);
+
+        Optional<TokenInfo> result = tokenValidator.validateToken(token);
+
+        assertTrue(result.isPresent());
+        assertFalse(result.get().hasRole("administrator"));
     }
 }

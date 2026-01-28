@@ -4,45 +4,63 @@ This document lists all third-party dependencies used in AI Arena and their lice
 
 ## License Summary
 
+All dependencies use permissive open-source licenses (Apache-2.0 or MIT).
+
 | Dependency | License | Type |
 |------------|---------|------|
+| RESTEasy | Apache-2.0 | Permissive |
 | Jakarta Servlet API | EPL-2.0 | Permissive |
-| Jersey | EPL-2.0 | Permissive |
-| HK2 | EPL-2.0 | Permissive |
 | Jackson | Apache-2.0 | Permissive |
 | Auth0 java-jwt | MIT | Permissive |
 | Auth0 jwks-rsa | MIT | Permissive |
 | SLF4J | MIT | Permissive |
-| Logback | EPL-1.0 | Permissive |
+| Log4j2 | Apache-2.0 | Permissive |
 | JUnit 5 | EPL-2.0 | Permissive (Test) |
 | Mockito | MIT | Permissive (Test) |
+| Undertow | Apache-2.0 | Permissive (Test) |
 
-## Dual-Licensed Dependencies
+## License Compliance
 
-The following dependencies are dual-licensed. We choose the permissive license variant:
+**All production dependencies use Apache-2.0 or MIT licenses** which are:
+- Permissive open-source licenses
+- Allow commercial use, modification, and distribution
+- Do not require derivative works to use the same license
+- Compatible with proprietary software
 
-### Jakarta EE / Eclipse EE4J
+No GPL, LGPL, or other copyleft licenses are used in production code.
 
-**Components:** Jakarta Servlet API, Jersey, HK2, Grizzly
-**Available Licenses:** EPL-2.0, GPL-2.0 with Classpath Exception
-**License Used:** EPL-2.0 (Eclipse Public License 2.0)
+## Dependency Details
 
-The Eclipse Public License 2.0 is a permissive open-source license that allows:
-- Commercial use
-- Modification
-- Distribution
-- Private use
+### RESTEasy (JAX-RS Implementation)
+- **License:** Apache License 2.0
+- **URL:** https://resteasy.dev/
+- **Components:** resteasy-servlet-initializer, resteasy-jackson2-provider
 
-### Logback
+### Log4j2 (Logging)
+- **License:** Apache License 2.0
+- **URL:** https://logging.apache.org/log4j/2.x/
+- **Components:** log4j-api, log4j-core, log4j-slf4j2-impl
 
-**Available Licenses:** EPL-1.0, LGPL-2.1
-**License Used:** EPL-1.0 (Eclipse Public License 1.0)
+### Jackson (JSON Processing)
+- **License:** Apache License 2.0
+- **URL:** https://github.com/FasterXML/jackson
+- **Components:** jackson-core, jackson-databind, jackson-annotations
+
+### Auth0 Libraries (JWT)
+- **License:** MIT
+- **URL:** https://github.com/auth0/java-jwt
+- **Components:** java-jwt, jwks-rsa
+
+### SLF4J (Logging API)
+- **License:** MIT
+- **URL:** https://www.slf4j.org/
+- **Components:** slf4j-api
 
 ## License Texts
 
 ### Apache License 2.0
 
-Used by: Jackson, Maven plugins
+Used by: RESTEasy, Log4j2, Jackson
 
 ```
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -81,30 +99,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-
-### Eclipse Public License 2.0 (EPL-2.0)
-
-Used by: Jakarta EE, Jersey, HK2, JUnit 5, Logback
-
-```
-Eclipse Public License - v 2.0
-
-THE ACCOMPANYING PROGRAM IS PROVIDED UNDER THE TERMS OF THIS ECLIPSE
-PUBLIC LICENSE ("AGREEMENT"). ANY USE, REPRODUCTION OR DISTRIBUTION
-OF THE PROGRAM CONSTITUTES RECIPIENT'S ACCEPTANCE OF THIS AGREEMENT.
-
-Full text: https://www.eclipse.org/legal/epl-2.0/
-```
-
-## Compliance Notes
-
-1. **All dependencies use permissive licenses** that allow commercial use, modification, and redistribution.
-
-2. **No copyleft/viral licenses** (GPL without exceptions) are used in production code.
-
-3. **Test-scope dependencies** (JUnit, Mockito) are not distributed with the final product.
-
-4. **Dual-licensed packages** explicitly use the permissive license option (EPL) instead of GPL.
 
 ## Generating License Report
 

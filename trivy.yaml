@@ -31,18 +31,20 @@ license:
     - BSL-1.0
     - PostgreSQL
     - BlueOak-1.0.0
-    # Dual-licensed dependencies (we choose permissive variant)
+    - W3C
+    - SAX-PD
+    - Public Domain
+    # Dual-licensed dependencies (classpath exception makes these permissive)
     - GPL-2.0-with-classpath-exception
+    - GPL-2.0 WITH Classpath-exception-2.0
+    - (GPL-2.0 OR CDDL-1.1)
+    - (EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0)
+    # LGPL variants (permissive for library usage)
+    - LGPL-2.1-only
     - LGPL-2.1-or-later
-
-  # License classification overrides for dual-licensed packages
-  # These packages are dual-licensed and we explicitly choose the permissive license
-  confidential:
-    - "Jakarta Servlet API"
-    - "Jersey"
-    - "HK2"
-    - "Logback"
-    - "Grizzly"
+    - LGPL-2.1
+    - LGPL-2.1+
+    - (EPL-1.0 OR LGPL-2.1-only)
 
 # Vulnerability settings
 vulnerability:

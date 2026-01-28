@@ -9,8 +9,8 @@ WORKDIR /app
 # Copy pom.xml first for dependency caching
 COPY pom.xml .
 
-# Download dependencies
-RUN mvn dependency:go-offline -B
+# Download dependencies (resolve to cache, skip tests)
+RUN mvn dependency:resolve -B
 
 # Copy source and build
 COPY src ./src
@@ -57,10 +57,11 @@ RUN curl -fsSL -o /tmp/jetty.tar.gz \
     mv /opt/jetty-home-${JETTY_VERSION} ${JETTY_HOME} && \
     rm /tmp/jetty.tar.gz
 
-# Setup Jetty base with HTTP and HTTPS support
+# Setup Jetty base with HTTP and HTTPS support (using WORKDIR instead of cd)
+WORKDIR ${JETTY_BASE}
 RUN mkdir -p ${JETTY_BASE}/webapps ${JETTY_BASE}/ssl && \
-    cd ${JETTY_BASE} && \
     java -jar ${JETTY_HOME}/start.jar --add-modules=server,http,https,ssl,deploy,webapp,jsp
+WORKDIR /app
 
 # Copy WAR file from build stage
 COPY --from=build /app/target/*.war ${JETTY_BASE}/webapps/ROOT.war
