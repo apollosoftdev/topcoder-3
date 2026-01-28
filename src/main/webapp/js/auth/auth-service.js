@@ -422,10 +422,14 @@ const AuthService = (function() {
             const parsed = JSON.parse(decoded);
 
             // Extract claims following tc-auth-lib pattern (handles namespaced claims)
+            // Use Object.keys for safer iteration (avoids prototype pollution)
+            const keys = Object.keys(parsed);
+
             // userId - find any key containing 'userId'
             if (!parsed.userId) {
-                for (const key in parsed) {
-                    if (key.indexOf('userId') !== -1) {
+                for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i];
+                    if (key.indexOf('userId') !== -1 && Object.prototype.hasOwnProperty.call(parsed, key)) {
                         parsed.userId = parseInt(parsed[key], 10);
                         break;
                     }
@@ -434,8 +438,9 @@ const AuthService = (function() {
 
             // handle - find any key containing 'handle'
             if (!parsed.handle) {
-                for (const key in parsed) {
-                    if (key.indexOf('handle') !== -1) {
+                for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i];
+                    if (key.indexOf('handle') !== -1 && Object.prototype.hasOwnProperty.call(parsed, key)) {
                         parsed.handle = parsed[key];
                         break;
                     }
@@ -444,8 +449,9 @@ const AuthService = (function() {
 
             // roles - find any key containing 'roles'
             if (!parsed.roles) {
-                for (const key in parsed) {
-                    if (key.indexOf('roles') !== -1) {
+                for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i];
+                    if (key.indexOf('roles') !== -1 && Object.prototype.hasOwnProperty.call(parsed, key)) {
                         parsed.roles = parsed[key];
                         break;
                     }
@@ -547,13 +553,52 @@ const AuthService = (function() {
     };
 
     /**
+     * Validate return URL to prevent open redirect attacks.
+     * Only allows URLs on the same origin or trusted topcoder domains.
+     */
+    const validateReturnUrl = function(url) {
+        if (!url) {
+            return window.location.href;
+        }
+
+        // Allow relative URLs
+        if (url.startsWith('/') && !url.startsWith('//')) {
+            return window.location.origin + url;
+        }
+
+        try {
+            const parsed = new URL(url);
+            const host = parsed.hostname.toLowerCase();
+
+            // Allow same origin
+            if (parsed.origin === window.location.origin) {
+                return url;
+            }
+
+            // Allow topcoder domains
+            if (host.endsWith('.topcoder.com') || host.endsWith('.topcoder-dev.com') ||
+                host === 'topcoder.com' || host === 'topcoder-dev.com') {
+                return url;
+            }
+
+            // Reject other external URLs - use current page instead
+            console.warn('Auth: Rejected external return URL:', url);
+            return window.location.href;
+        } catch (e) {
+            // Invalid URL format - use current page
+            return window.location.href;
+        }
+    };
+
+    /**
      * Generate login URL with return URL
      * Following platform-ui pattern: ${authUrl}?retUrl=${encodedRetUrl}
      */
     const generateLoginUrl = function(returnUrl) {
-        const retUrl = returnUrl || window.location.href.match(/[^?]*/)?.[0] || window.location.href;
+        // Validate return URL to prevent open redirect
+        const safeRetUrl = validateReturnUrl(returnUrl) || window.location.href.match(/[^?]*/)?.[0] || window.location.href;
         // Add a marker to detect post-login redirect
-        const retUrlWithMarker = retUrl + (retUrl.indexOf('?') === -1 ? '?' : '&') + '_auth=1';
+        const retUrlWithMarker = safeRetUrl + (safeRetUrl.indexOf('?') === -1 ? '?' : '&') + '_auth=1';
         const encodedReturnUrl = encodeURIComponent(retUrlWithMarker);
         return AuthConfig.AUTH_CONNECTOR_URL + '?retUrl=' + encodedReturnUrl;
     };
@@ -563,8 +608,9 @@ const AuthService = (function() {
      * Following platform-ui pattern: ${authUrl}?logout=true&retUrl=${encodedRetUrl}
      */
     const generateLogoutUrl = function(returnUrl) {
-        const retUrl = returnUrl || 'https://' + window.location.host;
-        const encodedReturnUrl = encodeURIComponent(retUrl);
+        // Validate return URL to prevent open redirect
+        const safeRetUrl = validateReturnUrl(returnUrl) || 'https://' + window.location.host;
+        const encodedReturnUrl = encodeURIComponent(safeRetUrl);
         return AuthConfig.AUTH_CONNECTOR_URL + '?logout=true&retUrl=' + encodedReturnUrl;
     };
 

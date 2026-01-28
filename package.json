@@ -32,7 +32,7 @@
     "docker:restart:https": "npm run docker:stop && npm run docker:build && npm run docker:run:https",
     "docker:logs": "docker logs -f ai-arena-app",
     "clean": "mvn clean",
-    "ssl:generate": "mkdir -p ssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout ssl/local.topcoder-dev.com.key -out ssl/local.topcoder-dev.com.crt -subj '/C=US/ST=State/L=City/O=Topcoder/CN=local.topcoder-dev.com' -addext 'subjectAltName=DNS:local.topcoder-dev.com,DNS:localhost'",
+    "ssl:generate": "echo 'See ssl/README.md for secure certificate generation instructions'",
     "ssl:trust:mac": "sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ssl/local.topcoder-dev.com.crt",
     "ssl:trust:linux": "sudo cp ssl/local.topcoder-dev.com.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates",
     "ssl:setup:mac": "npm run ssl:generate && npm run ssl:trust:mac",

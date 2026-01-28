@@ -1,8 +1,9 @@
 # AI Arena Docker Build
 # Multi-stage build for Java 17 + Maven
 
-# Build stage - using specific version for reproducibility
-FROM maven:3.9.6-eclipse-temurin-17-alpine AS build
+# Build stage - using specific version with SHA256 digest for reproducibility
+# hadolint ignore=DL3006
+FROM maven:3.9.6-eclipse-temurin-17-alpine@sha256:ffddac7b04101358048f872fba9d978b2a1f9647955d158c1e565233cb95577d AS build
 WORKDIR /app
 
 # Copy pom.xml first for dependency caching
@@ -15,8 +16,9 @@ RUN mvn dependency:go-offline -B
 COPY src ./src
 RUN mvn clean package -DskipTests -B
 
-# Runtime stage - using specific version with digest for security
-FROM eclipse-temurin:17.0.9_9-jre-jammy
+# Runtime stage - using specific version with SHA256 digest for security
+# hadolint ignore=DL3006
+FROM eclipse-temurin:17-jre-jammy@sha256:03c5b280ad53c041741552f231f5b65d97be39ca74fa4c7c1c9ace7f42cc3c9e
 
 # Security: Don't store secrets in environment variables
 # Labels for container metadata
@@ -38,14 +40,15 @@ RUN groupadd -r jetty && useradd -r -g jetty -d ${JETTY_BASE} -s /sbin/nologin j
 
 # Install dependencies with security best practices
 # - Update and install in single layer
-# - Clean up in same layer to reduce image size
+# - Clean up apt cache and lists in same layer to reduce image size
 # - Use --no-install-recommends to minimize attack surface
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         curl \
         unzip \
         ca-certificates && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
 
 # Download and install Jetty with verification
 RUN curl -fsSL -o /tmp/jetty.tar.gz \
