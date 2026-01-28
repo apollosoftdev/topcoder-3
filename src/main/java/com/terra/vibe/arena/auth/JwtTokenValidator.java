@@ -13,7 +13,7 @@ import com.terra.vibe.arena.config.AuthConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URL;
+import java.net.URI;
 import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +47,7 @@ public class JwtTokenValidator {
      */
     private JwkProvider buildJwkProvider(String jwksUrl) {
         try {
-            return new JwkProviderBuilder(new URL(jwksUrl))
+            return new JwkProviderBuilder(URI.create(jwksUrl).toURL())
                     .cached(10, 24, TimeUnit.HOURS)
                     .rateLimited(10, 1, TimeUnit.MINUTES)
                     .build();
@@ -141,9 +141,9 @@ public class JwtTokenValidator {
         }
 
         if (secret == null || secret.isEmpty()) {
-            logger.warn("HS256 secret not configured, skipping signature verification");
-            // For development, just decode without verification
-            return JWT.decode(token);
+            logger.error("HS256 secret not configured - cannot validate V2 token. Set TC_AUTH_SECRET environment variable.");
+            // Security: Do not skip signature verification - reject token instead
+            return null;
         }
 
         try {

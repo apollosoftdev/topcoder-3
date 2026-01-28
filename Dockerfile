@@ -44,23 +44,27 @@ COPY --from=build /app/target/*.war ${JETTY_BASE}/webapps/ROOT.war
 # Copy SSL certificates (optional - mount at runtime if not present)
 COPY ssl/local.topcoder-dev.com.* ${JETTY_BASE}/ssl/
 
+# SSL keystore password (override with -e SSL_KEYSTORE_PASSWORD=xxx at runtime)
+ARG SSL_KEYSTORE_PASSWORD=dev-only-password
+ENV SSL_KEYSTORE_PASSWORD=${SSL_KEYSTORE_PASSWORD}
+
 # Create keystore from certificates
 RUN if [ -f ${JETTY_BASE}/ssl/local.topcoder-dev.com.crt ]; then \
     openssl pkcs12 -export -in ${JETTY_BASE}/ssl/local.topcoder-dev.com.crt \
         -inkey ${JETTY_BASE}/ssl/local.topcoder-dev.com.key \
         -out ${JETTY_BASE}/ssl/keystore.p12 \
-        -name jetty -password pass:changeit && \
+        -name jetty -password pass:${SSL_KEYSTORE_PASSWORD} && \
     keytool -importkeystore -srckeystore ${JETTY_BASE}/ssl/keystore.p12 \
-        -srcstoretype PKCS12 -srcstorepass changeit \
+        -srcstoretype PKCS12 -srcstorepass ${SSL_KEYSTORE_PASSWORD} \
         -destkeystore ${JETTY_BASE}/ssl/keystore.jks \
-        -deststorepass changeit -noprompt; \
+        -deststorepass ${SSL_KEYSTORE_PASSWORD} -noprompt; \
     fi
 
-# Configure Jetty SSL
+# Configure Jetty SSL (password set at runtime via environment)
 RUN echo "jetty.ssl.port=443" >> ${JETTY_BASE}/start.d/ssl.ini && \
     echo "jetty.sslContext.keyStorePath=ssl/keystore.jks" >> ${JETTY_BASE}/start.d/ssl.ini && \
-    echo "jetty.sslContext.keyStorePassword=changeit" >> ${JETTY_BASE}/start.d/ssl.ini && \
-    echo "jetty.sslContext.keyManagerPassword=changeit" >> ${JETTY_BASE}/start.d/ssl.ini
+    echo "jetty.sslContext.keyStorePassword=${SSL_KEYSTORE_PASSWORD}" >> ${JETTY_BASE}/start.d/ssl.ini && \
+    echo "jetty.sslContext.keyManagerPassword=${SSL_KEYSTORE_PASSWORD}" >> ${JETTY_BASE}/start.d/ssl.ini
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh

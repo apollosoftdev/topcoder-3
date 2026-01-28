@@ -66,10 +66,42 @@ const MIME_TYPES = {
     '.ico': 'image/x-icon'
 };
 
+// Allowed CORS origins
+const ALLOWED_ORIGINS = [
+    'https://local.topcoder-dev.com',
+    'https://accounts.topcoder.com',
+    'https://accounts-auth0.topcoder.com',
+    'https://accounts.topcoder-dev.com',
+    'https://accounts-auth0.topcoder-dev.com',
+    'http://localhost:8080',
+    'https://localhost:443'
+];
+
+// Get allowed origin for CORS
+function getAllowedOrigin(req) {
+    const origin = req.headers.origin;
+    if (!origin) return null;
+
+    if (ALLOWED_ORIGINS.includes(origin)) {
+        return origin;
+    }
+    // Allow topcoder subdomains
+    if (origin.endsWith('.topcoder.com') || origin.endsWith('.topcoder-dev.com')) {
+        return origin;
+    }
+    // Allow localhost variations
+    if (origin.startsWith('http://localhost') || origin.startsWith('https://localhost') ||
+        origin.startsWith('http://127.0.0.1') || origin.startsWith('https://127.0.0.1')) {
+        return origin;
+    }
+    return null;
+}
+
 // Content Security Policy for development
+// Note: unsafe-inline needed for injected env script, but removing unsafe-eval
 const CSP_HEADER = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.auth0.com https://*.topcoder.com https://*.topcoder-dev.com",
+    "script-src 'self' 'unsafe-inline' https://cdn.auth0.com https://*.topcoder.com https://*.topcoder-dev.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' https:",
@@ -87,7 +119,7 @@ const PROXY_ROUTES = {
 
 // Handle proxy requests to external services
 function handleProxy(req, res) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const url = new URL(req.url, `http://localhost:${HTTP_PORT}`);
 
     // Find matching proxy route
     let targetHost = null;
@@ -117,8 +149,12 @@ function handleProxy(req, res) {
             host: targetHost
         }
     }, (proxyRes) => {
-        // Set CORS headers
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        // Set CORS headers (only for allowed origins)
+        const allowedOrigin = getAllowedOrigin(req);
+        if (allowedOrigin) {
+            res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+        }
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -149,11 +185,17 @@ const mockProgress = new Map();
 
 // Handle API requests
 function handleAPI(req, res) {
-    const url = new URL(req.url, `http://localhost:${PORT}`);
+    const url = new URL(req.url, `http://localhost:${HTTP_PORT}`);
     const pathname = url.pathname;
 
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    // Set CORS headers only for allowed origins
+    const allowedOrigin = getAllowedOrigin(req);
+    if (allowedOrigin) {
+        res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
@@ -192,6 +234,12 @@ function handleAPI(req, res) {
     // Member profile
     if (pathname.startsWith('/api/auth/member/')) {
         const handle = pathname.split('/').pop();
+        // Validate handle format (alphanumeric, underscore, hyphen, 1-50 chars)
+        if (!handle || !/^[a-zA-Z0-9_-]{1,50}$/.test(handle)) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'Invalid handle format' }));
+            return;
+        }
         res.writeHead(200);
         res.end(JSON.stringify({
             handle: handle,
@@ -218,6 +266,12 @@ function handleAPI(req, res) {
     // Scores leaderboard
     if (pathname.startsWith('/api/scores/leaderboard/')) {
         const competitionId = pathname.split('/').pop();
+        // Validate competitionId format (alphanumeric, underscore, hyphen, 1-50 chars)
+        if (!competitionId || !/^[a-zA-Z0-9_-]{1,50}$/.test(competitionId)) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'Invalid competition ID format' }));
+            return;
+        }
         const entries = mockScores
             .filter(s => s.competitionId === competitionId)
             .sort((a, b) => b.score - a.score)
@@ -304,7 +358,11 @@ function requestHandler(req, res) {
 
     // Handle CORS preflight for all routes
     if (req.method === 'OPTIONS') {
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        const allowedOrigin = getAllowedOrigin(req);
+        if (allowedOrigin) {
+            res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+            res.setHeader('Access-Control-Allow-Credentials', 'true');
+        }
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         res.writeHead(200);

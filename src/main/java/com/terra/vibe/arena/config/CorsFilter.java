@@ -50,16 +50,22 @@ public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilt
     public void filter(ContainerRequestContext requestContext) throws IOException {
         // Handle preflight OPTIONS request
         if (requestContext.getMethod().equalsIgnoreCase("OPTIONS")) {
-            logger.debug("Handling CORS preflight request");
-            requestContext.abortWith(
-                    Response.ok()
-                            .header("Access-Control-Allow-Origin", getAllowedOrigin(requestContext))
-                            .header("Access-Control-Allow-Credentials", "true")
-                            .header("Access-Control-Allow-Methods", ALLOWED_METHODS)
-                            .header("Access-Control-Allow-Headers", ALLOWED_HEADERS)
-                            .header("Access-Control-Max-Age", MAX_AGE)
-                            .build()
-            );
+            String origin = getAllowedOrigin(requestContext);
+            logger.debug("Handling CORS preflight request from origin: {}", origin);
+
+            Response.ResponseBuilder responseBuilder = Response.ok();
+
+            // Only add CORS headers if origin is allowed
+            if (origin != null) {
+                responseBuilder
+                        .header("Access-Control-Allow-Origin", origin)
+                        .header("Access-Control-Allow-Credentials", "true")
+                        .header("Access-Control-Allow-Methods", ALLOWED_METHODS)
+                        .header("Access-Control-Allow-Headers", ALLOWED_HEADERS)
+                        .header("Access-Control-Max-Age", MAX_AGE);
+            }
+
+            requestContext.abortWith(responseBuilder.build());
         }
     }
 
@@ -68,25 +74,29 @@ public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilt
             throws IOException {
         String origin = getAllowedOrigin(requestContext);
 
-        // Add CORS headers to response
-        responseContext.getHeaders().add("Access-Control-Allow-Origin", origin);
-        responseContext.getHeaders().add("Access-Control-Allow-Credentials", "true");
-        responseContext.getHeaders().add("Access-Control-Allow-Methods", ALLOWED_METHODS);
-        responseContext.getHeaders().add("Access-Control-Allow-Headers", ALLOWED_HEADERS);
-        responseContext.getHeaders().add("Access-Control-Expose-Headers",
-                "Content-Type, Authorization, X-Total-Count");
+        // Only add CORS headers if origin is allowed
+        if (origin != null) {
+            responseContext.getHeaders().add("Access-Control-Allow-Origin", origin);
+            responseContext.getHeaders().add("Access-Control-Allow-Credentials", "true");
+            responseContext.getHeaders().add("Access-Control-Allow-Methods", ALLOWED_METHODS);
+            responseContext.getHeaders().add("Access-Control-Allow-Headers", ALLOWED_HEADERS);
+            responseContext.getHeaders().add("Access-Control-Expose-Headers",
+                    "Content-Type, Authorization, X-Total-Count");
+        }
     }
 
     /**
      * Get the allowed origin for the request.
      * Returns the request origin if it's in the allowed list,
      * or allows localhost for development.
+     * Returns null if origin is not allowed (no CORS headers will be set).
      */
     private String getAllowedOrigin(ContainerRequestContext requestContext) {
         String origin = requestContext.getHeaderString("Origin");
 
-        if (origin == null) {
-            return "*";
+        // No origin header means same-origin request, allow it
+        if (origin == null || origin.isEmpty()) {
+            return null;
         }
 
         // Check if origin is in allowed list
@@ -104,8 +114,13 @@ public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilt
             return origin;
         }
 
-        logger.debug("Origin not in allowed list: {}", origin);
-        return "*";
+        // Allow local.topcoder-dev.com for local development
+        if (origin.contains("local.topcoder-dev.com")) {
+            return origin;
+        }
+
+        logger.warn("CORS: Origin not allowed: {}", origin);
+        return null;
     }
 
     /**

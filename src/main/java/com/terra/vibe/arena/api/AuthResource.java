@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * REST API endpoints for authentication status and member profile.
@@ -24,6 +25,9 @@ import java.util.Optional;
 public class AuthResource {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthResource.class);
+
+    // Valid handle pattern: alphanumeric, underscore, hyphen, 1-50 chars
+    private static final Pattern HANDLE_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,50}$");
 
     private final JwtTokenValidator tokenValidator;
     private final AuthConfig authConfig;
@@ -92,6 +96,14 @@ public class AuthResource {
             if (handle == null || handle.isEmpty()) {
                 return Response.status(Response.Status.BAD_REQUEST)
                         .entity(createErrorResponse("Handle is required"))
+                        .build();
+            }
+
+            // Validate handle format to prevent injection attacks
+            if (!HANDLE_PATTERN.matcher(handle).matches()) {
+                logger.warn("Invalid handle format attempted: {}", handle.substring(0, Math.min(handle.length(), 20)));
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(createErrorResponse("Invalid handle format"))
                         .build();
             }
 
