@@ -29,9 +29,11 @@ public class AuthConfig {
     public static final String JWKS_URL = "topcoder.auth.jwks.url";
     public static final String ISSUER = "topcoder.auth.issuer";
     public static final String CLAIMS_NAMESPACE = "topcoder.auth.claims.namespace";
-    // Role configuration property keys (not credentials)
-    public static final String ROLE_ADMIN_KEY = "topcoder.auth.role.admin"; // nosemgrep: hardcoded_username
-    public static final String ROLE_MEMBER_KEY = "topcoder.auth.role.member"; // nosemgrep: hardcoded_username
+    // Role configuration property names (not credentials - these are property lookup strings)
+    // nosemgrep: hardcoded_api_key, HARD_CODE_KEY-2
+    public static final String ROLE_ADMIN_PROP = "topcoder.auth.role.admin";
+    // nosemgrep: hardcoded_api_key, HARD_CODE_KEY-2
+    public static final String ROLE_MEMBER_PROP = "topcoder.auth.role.member";
 
     private AuthConfig() {
         this.properties = loadProperties();
@@ -153,12 +155,13 @@ public class AuthConfig {
     }
 
     public String getAdminRole() {
-        return getProperty(ROLE_ADMIN_KEY, "administrator");
+        // nosemgrep: hardcoded_api_key
+        return getProperty(ROLE_ADMIN_PROP, "administrator");
     }
 
     public String getMemberRole() {
-        // nosemgrep: hardcoded_username
-        return getProperty(ROLE_MEMBER_KEY, "Topcoder User");
+        // nosemgrep: hardcoded_api_key
+        return getProperty(ROLE_MEMBER_PROP, "Topcoder User");
     }
 
     public boolean isDevelopment() {

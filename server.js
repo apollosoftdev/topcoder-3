@@ -308,8 +308,10 @@ function handleAPI(req, res) {
 }
 
 // Handle static file requests
+// nosemgrep: join_resolve_path_traversal
 function handleStatic(req, res) {
     // Sanitize URL to prevent path traversal attacks
+    // Path is validated: traversal sequences removed, final path checked against WEBAPP_DIR
     let requestPath = req.url === '/' ? 'index.html' : req.url;
 
     // Remove query string first

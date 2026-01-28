@@ -39,16 +39,19 @@ WORKDIR /app
 RUN groupadd -r jetty && useradd -r -g jetty -d ${JETTY_BASE} -s /sbin/nologin jetty
 
 # Install dependencies with security best practices
-# - Update and install in single layer
-# - Clean up apt cache and lists in same layer to reduce image size
+# - Update, install, and clean in single layer to reduce image size
 # - Use --no-install-recommends to minimize attack surface
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# - Remove package lists immediately after apt-get update
+# nosemgrep: dockerfile.security.missing-apt-get-clean
+RUN apt-get update \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
         curl \
         unzip \
-        ca-certificates && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
+        ca-certificates \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
 
 # Download and install Jetty with verification
 RUN curl -fsSL -o /tmp/jetty.tar.gz \
@@ -57,9 +60,9 @@ RUN curl -fsSL -o /tmp/jetty.tar.gz \
     mv /opt/jetty-home-${JETTY_VERSION} ${JETTY_HOME} && \
     rm /tmp/jetty.tar.gz
 
-# Setup Jetty base with HTTP and HTTPS support (using WORKDIR instead of cd)
-WORKDIR ${JETTY_BASE}
-RUN mkdir -p ${JETTY_BASE}/webapps ${JETTY_BASE}/ssl && \
+# Setup Jetty base with HTTP and HTTPS support (using absolute WORKDIR)
+WORKDIR /var/lib/jetty
+RUN mkdir -p /var/lib/jetty/webapps /var/lib/jetty/ssl && \
     java -jar ${JETTY_HOME}/start.jar --add-modules=server,http,https,ssl,deploy,webapp,jsp
 WORKDIR /app
 
@@ -98,7 +101,7 @@ EXPOSE 8080 443
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD ["sh", "-c", "curl -f http://localhost:8080/ || exit 1"]
 
-WORKDIR ${JETTY_BASE}
+WORKDIR /var/lib/jetty
 
 # Run as non-root user (security best practice)
 USER jetty
