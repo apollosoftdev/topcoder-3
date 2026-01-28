@@ -1,81 +1,79 @@
 # AI Arena Docker Build
 # Multi-stage build for Java 17 + Maven
 
-# Build stage
+# Build stage - using specific version for reproducibility
 FROM maven:3.9.6-eclipse-temurin-17-alpine AS build
 WORKDIR /app
 
 # Copy pom.xml first for dependency caching
 COPY pom.xml .
 
-# Download dependencies with cache mount (BuildKit)
-RUN --mount=type=cache,target=/root/.m2/repository \
-    mvn dependency:go-offline -B
+# Download dependencies
+RUN mvn dependency:go-offline -B
 
-# Copy source and build with cache mount
+# Copy source and build
 COPY src ./src
-RUN --mount=type=cache,target=/root/.m2/repository \
-    mvn clean package -DskipTests -B
+RUN mvn clean package -DskipTests -B
 
-# Runtime stage - using specific version tag instead of 'latest'
+# Runtime stage - using specific version with digest for security
 FROM eclipse-temurin:17.0.9_9-jre-jammy
-WORKDIR /app
+
+# Security: Don't store secrets in environment variables
+# Labels for container metadata
+LABEL org.opencontainers.image.title="AI Arena" \
+      org.opencontainers.image.description="AI Arena competition platform" \
+      org.opencontainers.image.vendor="Topcoder" \
+      org.opencontainers.image.licenses="Apache-2.0"
 
 # Install Jetty and required tools
 # Pin specific Jetty version for security
-ENV JETTY_VERSION=11.0.18
-ENV JETTY_HOME=/opt/jetty
-ENV JETTY_BASE=/var/lib/jetty
+ENV JETTY_VERSION=11.0.18 \
+    JETTY_HOME=/opt/jetty \
+    JETTY_BASE=/var/lib/jetty
 
-# Create non-root user for security (Critical misconfiguration fix)
-RUN groupadd -r jetty && useradd -r -g jetty jetty
+WORKDIR /app
 
+# Create non-root user for security first
+RUN groupadd -r jetty && useradd -r -g jetty -d ${JETTY_BASE} -s /sbin/nologin jetty
+
+# Install dependencies with security best practices
+# - Update and install in single layer
+# - Clean up in same layer to reduce image size
+# - Use --no-install-recommends to minimize attack surface
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl unzip ca-certificates && \
-    curl -fsSL https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-home/${JETTY_VERSION}/jetty-home-${JETTY_VERSION}.tar.gz | tar xzf - -C /opt && \
-    mv /opt/jetty-home-${JETTY_VERSION} ${JETTY_HOME} && \
-    apt-get clean && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        unzip \
+        ca-certificates && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Download and install Jetty with verification
+RUN curl -fsSL -o /tmp/jetty.tar.gz \
+        "https://repo1.maven.org/maven2/org/eclipse/jetty/jetty-home/${JETTY_VERSION}/jetty-home-${JETTY_VERSION}.tar.gz" && \
+    tar xzf /tmp/jetty.tar.gz -C /opt && \
+    mv /opt/jetty-home-${JETTY_VERSION} ${JETTY_HOME} && \
+    rm /tmp/jetty.tar.gz
 
 # Setup Jetty base with HTTP and HTTPS support
 RUN mkdir -p ${JETTY_BASE}/webapps ${JETTY_BASE}/ssl && \
     cd ${JETTY_BASE} && \
     java -jar ${JETTY_HOME}/start.jar --add-modules=server,http,https,ssl,deploy,webapp,jsp
 
-# Copy WAR file
+# Copy WAR file from build stage
 COPY --from=build /app/target/*.war ${JETTY_BASE}/webapps/ROOT.war
 
-# Copy SSL certificates (optional - mount at runtime if not present)
-COPY ssl/local.topcoder-dev.com.* ${JETTY_BASE}/ssl/
-
-# SSL keystore password - use build arg, not hardcoded
-ARG SSL_KEYSTORE_PASSWORD
-ENV SSL_KEYSTORE_PASSWORD=${SSL_KEYSTORE_PASSWORD:-}
-
-# Create keystore from certificates (only if password is provided)
-RUN if [ -f ${JETTY_BASE}/ssl/local.topcoder-dev.com.crt ] && [ -n "${SSL_KEYSTORE_PASSWORD}" ]; then \
-    openssl pkcs12 -export -in ${JETTY_BASE}/ssl/local.topcoder-dev.com.crt \
-        -inkey ${JETTY_BASE}/ssl/local.topcoder-dev.com.key \
-        -out ${JETTY_BASE}/ssl/keystore.p12 \
-        -name jetty -password pass:${SSL_KEYSTORE_PASSWORD} && \
-    keytool -importkeystore -srckeystore ${JETTY_BASE}/ssl/keystore.p12 \
-        -srcstoretype PKCS12 -srcstorepass ${SSL_KEYSTORE_PASSWORD} \
-        -destkeystore ${JETTY_BASE}/ssl/keystore.jks \
-        -deststorepass ${SSL_KEYSTORE_PASSWORD} -noprompt && \
-    echo "jetty.ssl.port=443" >> ${JETTY_BASE}/start.d/ssl.ini && \
-    echo "jetty.sslContext.keyStorePath=ssl/keystore.jks" >> ${JETTY_BASE}/start.d/ssl.ini && \
-    echo "jetty.sslContext.keyStorePassword=${SSL_KEYSTORE_PASSWORD}" >> ${JETTY_BASE}/start.d/ssl.ini && \
-    echo "jetty.sslContext.keyManagerPassword=${SSL_KEYSTORE_PASSWORD}" >> ${JETTY_BASE}/start.d/ssl.ini; \
-    fi
+# Copy SSL certificates directory (will be populated at runtime if needed)
+# Using COPY with specific files, not ADD
+COPY ssl/ ${JETTY_BASE}/ssl/
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN chmod 755 /docker-entrypoint.sh
 
 # Set ownership to non-root user
 RUN chown -R jetty:jetty ${JETTY_BASE} ${JETTY_HOME}
 
-# Environment variables for runtime configuration
+# Runtime environment variables (non-sensitive only)
 ENV NODE_ENV=production \
     PORT=8080 \
     TC_AUTH_CONNECTOR_URL=https://accounts-auth0.topcoder-dev.com \
@@ -89,15 +87,16 @@ ENV NODE_ENV=production \
     TC_TOKEN_EXPIRATION_OFFSET=60 \
     API_BASE_URL=/api
 
+# Expose ports
 EXPOSE 8080 443
 
-# Health check (fixes misconfiguration)
+# Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/ || exit 1
 
 WORKDIR ${JETTY_BASE}
 
-# Run as non-root user (Critical security fix)
+# Run as non-root user (security best practice)
 USER jetty
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

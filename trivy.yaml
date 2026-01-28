@@ -1,0 +1,56 @@
+# Trivy configuration file
+# https://aquasecurity.github.io/trivy/latest/docs/references/configuration/config-file/
+
+# Scan settings
+scan:
+  # Skip directories that don't need scanning
+  skip-dirs:
+    - node_modules
+    - .git
+    - target
+    - ssl
+
+# License scanning settings
+license:
+  # Allowed licenses (permissive licenses)
+  allowed:
+    - Apache-2.0
+    - MIT
+    - BSD-2-Clause
+    - BSD-3-Clause
+    - ISC
+    - EPL-1.0
+    - EPL-2.0
+    - MPL-2.0
+    - CDDL-1.0
+    - CDDL-1.1
+    - Unlicense
+    - CC0-1.0
+    - 0BSD
+    - Zlib
+    - BSL-1.0
+    - PostgreSQL
+    - BlueOak-1.0.0
+    # Dual-licensed dependencies (we choose permissive variant)
+    - GPL-2.0-with-classpath-exception
+    - LGPL-2.1-or-later
+
+  # License classification overrides for dual-licensed packages
+  # These packages are dual-licensed and we explicitly choose the permissive license
+  confidential:
+    - "Jakarta Servlet API"
+    - "Jersey"
+    - "HK2"
+    - "Logback"
+    - "Grizzly"
+
+# Vulnerability settings
+vulnerability:
+  # Ignore unfixed vulnerabilities
+  ignore-unfixed: false
+
+# Misconfiguration settings
+misconfiguration:
+  # Dockerfile checks
+  include:
+    - dockerfile

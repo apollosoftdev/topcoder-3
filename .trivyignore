@@ -1,0 +1,24 @@
+# Trivy ignore file for known acceptable licenses
+# These are dual-licensed dependencies where we choose the permissive license
+
+# Jakarta EE (EPL-2.0 / GPL-2.0 with Classpath Exception) - choosing EPL-2.0
+jakarta.servlet:jakarta.servlet-api
+
+# Jersey JAX-RS (EPL-2.0 / GPL-2.0 with Classpath Exception) - choosing EPL-2.0
+org.glassfish.jersey.*
+
+# HK2 Dependency Injection (EPL-2.0 / GPL-2.0 with Classpath Exception) - choosing EPL-2.0
+org.glassfish.hk2.*
+
+# JUnit (EPL-2.0) - test scope only
+org.junit.*
+
+# Logback (EPL-1.0 / LGPL-2.1) - choosing EPL-1.0
+ch.qos.logback:logback-classic
+ch.qos.logback:logback-core
+
+# Grizzly (EPL-2.0 / GPL-2.0 with Classpath Exception) - test scope, choosing EPL-2.0
+org.glassfish.grizzly.*
+
+# javax.annotation (CDDL + GPL with Classpath Exception) - using under CDDL
+javax.annotation:javax.annotation-api

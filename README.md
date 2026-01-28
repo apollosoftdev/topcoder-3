@@ -569,3 +569,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 See the [LICENSE](LICENSE) file for details.
+
+### Third-Party Licenses
+
+This project uses third-party dependencies with permissive open-source licenses.
+See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) and [NOTICE](NOTICE) for details.

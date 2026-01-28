@@ -1,0 +1,63 @@
+AI Arena
+Copyright 2024 Topcoder
+
+This product includes software developed by Topcoder (https://www.topcoder.com/).
+
+Licensed under the Apache License, Version 2.0.
+
+================================================================================
+
+This product includes third-party software licensed under various open source licenses.
+See THIRD-PARTY-LICENSES.md for details.
+
+Third-Party Dependencies:
+
+--------------------------------------------------------------------------------
+Jakarta Servlet API
+  License: EPL-2.0, GPL-2.0-with-classpath-exception
+  Website: https://jakarta.ee/
+  Note: Used under EPL-2.0
+
+--------------------------------------------------------------------------------
+Jersey (JAX-RS Reference Implementation)
+  License: EPL-2.0, GPL-2.0-with-classpath-exception
+  Website: https://eclipse-ee4j.github.io/jersey/
+  Note: Used under EPL-2.0
+
+--------------------------------------------------------------------------------
+Jackson JSON Processor
+  License: Apache-2.0
+  Website: https://github.com/FasterXML/jackson
+
+--------------------------------------------------------------------------------
+Auth0 Java JWT
+  License: MIT
+  Website: https://github.com/auth0/java-jwt
+
+--------------------------------------------------------------------------------
+Auth0 JWKS RSA
+  License: MIT
+  Website: https://github.com/auth0/jwks-rsa-java
+
+--------------------------------------------------------------------------------
+SLF4J
+  License: MIT
+  Website: http://www.slf4j.org/
+
+--------------------------------------------------------------------------------
+Logback
+  License: EPL-1.0, LGPL-2.1
+  Website: http://logback.qos.ch/
+  Note: Used under EPL-1.0
+
+--------------------------------------------------------------------------------
+JUnit 5
+  License: EPL-2.0
+  Website: https://junit.org/junit5/
+  Scope: Test only
+
+--------------------------------------------------------------------------------
+Mockito
+  License: MIT
+  Website: https://site.mockito.org/
+  Scope: Test only

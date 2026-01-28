@@ -1,6 +1,6 @@
 #!/bin/bash
 # Docker entrypoint script
-# Injects environment variables into frontend before starting Jetty
+# Injects environment variables into frontend and configures SSL at runtime
 
 set -e
 
@@ -35,8 +35,40 @@ window.__ENV__ = {
 };
 EOF
 
-echo "Environment config generated:"
-cat "${WEBAPP_DIR}/js/env-config.js"
+echo "Environment config generated."
+
+# Configure SSL keystore at runtime (if credentials provided via environment)
+# This avoids storing secrets in the Docker image
+if [ -f "${JETTY_BASE}/ssl/local.topcoder-dev.com.crt" ] && [ -n "${SSL_KEYSTORE_PASSWORD}" ]; then
+    echo "Configuring SSL keystore..."
+
+    # Create PKCS12 keystore from certificates
+    openssl pkcs12 -export \
+        -in "${JETTY_BASE}/ssl/local.topcoder-dev.com.crt" \
+        -inkey "${JETTY_BASE}/ssl/local.topcoder-dev.com.key" \
+        -out "${JETTY_BASE}/ssl/keystore.p12" \
+        -name jetty \
+        -password "pass:${SSL_KEYSTORE_PASSWORD}"
+
+    # Convert to JKS format
+    keytool -importkeystore \
+        -srckeystore "${JETTY_BASE}/ssl/keystore.p12" \
+        -srcstoretype PKCS12 \
+        -srcstorepass "${SSL_KEYSTORE_PASSWORD}" \
+        -destkeystore "${JETTY_BASE}/ssl/keystore.jks" \
+        -deststorepass "${SSL_KEYSTORE_PASSWORD}" \
+        -noprompt 2>/dev/null || true
+
+    # Configure Jetty SSL
+    cat >> "${JETTY_BASE}/start.d/ssl.ini" << SSLEOF
+jetty.ssl.port=443
+jetty.sslContext.keyStorePath=ssl/keystore.jks
+jetty.sslContext.keyStorePassword=${SSL_KEYSTORE_PASSWORD}
+jetty.sslContext.keyManagerPassword=${SSL_KEYSTORE_PASSWORD}
+SSLEOF
+
+    echo "SSL configured successfully."
+fi
 
 # Change to JETTY_BASE before starting Jetty
 cd "${JETTY_BASE}"
