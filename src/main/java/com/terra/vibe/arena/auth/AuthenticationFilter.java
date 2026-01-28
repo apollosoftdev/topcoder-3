@@ -13,6 +13,8 @@ import jakarta.ws.rs.ext.Provider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
 import java.security.Principal;
 import java.util.Map;
@@ -180,13 +182,23 @@ public class AuthenticationFilter implements ContainerRequestFilter {
         });
     }
 
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+
     /**
      * Abort request with 401 Unauthorized.
+     * Uses proper JSON serialization to prevent injection.
      */
     private void abortUnauthorized(ContainerRequestContext requestContext, String message) {
+        String jsonResponse;
+        try {
+            jsonResponse = JSON_MAPPER.writeValueAsString(Map.of("error", message));
+        } catch (Exception e) {
+            // Fallback to safe hardcoded message
+            jsonResponse = "{\"error\":\"Authentication failed\"}";
+        }
         requestContext.abortWith(
                 Response.status(Response.Status.UNAUTHORIZED)
-                        .entity("{\"error\": \"" + message + "\"}")
+                        .entity(jsonResponse)
                         .type("application/json")
                         .build()
         );

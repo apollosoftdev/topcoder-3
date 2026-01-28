@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * REST API endpoints for progress tracking.
@@ -28,6 +29,11 @@ public class ProgressResource {
     private static final Logger logger = LoggerFactory.getLogger(ProgressResource.class);
 
     private final ProgressService progressService = ProgressService.getInstance();
+
+    // Validation patterns to prevent injection and path traversal
+    private static final Pattern ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,100}$");
+    private static final int MAX_DATA_DEPTH = 5;
+    private static final int MAX_DATA_SIZE = 10000; // Max characters when serialized
 
     /**
      * Save progress checkpoint.
@@ -43,9 +49,10 @@ public class ProgressResource {
                         .build();
             }
 
-            String competitionId = (String) request.get("competitionId");
-            String checkpointId = (String) request.get("checkpointId");
+            String competitionId = getStringParam(request, "competitionId");
+            String checkpointId = getStringParam(request, "checkpointId");
 
+            // Validate required fields
             if (competitionId == null || competitionId.isEmpty()) {
                 return badRequest("competitionId is required");
             }
@@ -53,14 +60,24 @@ public class ProgressResource {
                 return badRequest("checkpointId is required");
             }
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> data = (Map<String, Object>) request.get("data");
+            // Validate format to prevent path traversal and injection
+            if (!isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
+            }
+            if (!isValidId(checkpointId)) {
+                return badRequest("Invalid checkpointId format");
+            }
+
+            // Safely extract and validate data object
+            Map<String, Object> data = extractAndValidateData(request.get("data"));
 
             Progress progress = progressService.saveProgress(
                     competitionId, checkpointId, tokenInfo.getHandle(), tokenInfo.getUserId(), data);
 
             return Response.ok(progressToMap(progress)).build();
 
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
         } catch (Exception e) {
             logger.error("Error saving progress", e);
             return serverError("Failed to save progress");
@@ -80,6 +97,11 @@ public class ProgressResource {
                 return Response.status(Response.Status.UNAUTHORIZED)
                         .entity(errorResponse("Authentication required"))
                         .build();
+            }
+
+            // Validate format to prevent path traversal
+            if (!isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
             }
 
             List<Progress> progressList = progressService.loadAllProgress(competitionId, tokenInfo.getHandle());
@@ -110,6 +132,14 @@ public class ProgressResource {
                 return Response.status(Response.Status.UNAUTHORIZED)
                         .entity(errorResponse("Authentication required"))
                         .build();
+            }
+
+            // Validate format to prevent path traversal
+            if (!isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
+            }
+            if (!isValidId(checkpointId)) {
+                return badRequest("Invalid checkpointId format");
             }
 
             Optional<Progress> progress = progressService.loadProgress(
@@ -172,6 +202,11 @@ public class ProgressResource {
                         .build();
             }
 
+            // Validate format to prevent path traversal
+            if (!isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
+            }
+
             boolean success = progressService.clearProgress(competitionId, tokenInfo.getHandle());
 
             Map<String, Object> response = new HashMap<>();
@@ -213,6 +248,85 @@ public class ProgressResource {
             logger.error("Error getting progress stats", e);
             return serverError("Failed to get progress stats");
         }
+    }
+
+    /**
+     * Validate ID format to prevent path traversal and injection attacks.
+     */
+    private boolean isValidId(String id) {
+        return id != null && ID_PATTERN.matcher(id).matches();
+    }
+
+    /**
+     * Safely extract string parameter from request map.
+     */
+    private String getStringParam(Map<String, Object> request, String key) {
+        Object value = request.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        return value.toString();
+    }
+
+    /**
+     * Safely extract and validate data object from request.
+     * Prevents deserialization attacks by validating structure and depth.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractAndValidateData(Object dataObj) {
+        if (dataObj == null) {
+            return null;
+        }
+
+        if (!(dataObj instanceof Map)) {
+            throw new IllegalArgumentException("data must be an object");
+        }
+
+        Map<String, Object> data = (Map<String, Object>) dataObj;
+
+        // Validate data depth to prevent deeply nested attacks
+        validateDataDepth(data, 0);
+
+        // Validate total size
+        String serialized = data.toString();
+        if (serialized.length() > MAX_DATA_SIZE) {
+            throw new IllegalArgumentException("data exceeds maximum size");
+        }
+
+        return data;
+    }
+
+    /**
+     * Recursively validate data depth.
+     */
+    @SuppressWarnings("unchecked")
+    private void validateDataDepth(Object obj, int depth) {
+        if (depth > MAX_DATA_DEPTH) {
+            throw new IllegalArgumentException("data exceeds maximum nesting depth");
+        }
+
+        if (obj instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) obj;
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                // Validate key format
+                if (entry.getKey() == null || entry.getKey().length() > 100) {
+                    throw new IllegalArgumentException("Invalid data key");
+                }
+                validateDataDepth(entry.getValue(), depth + 1);
+            }
+        } else if (obj instanceof List) {
+            List<?> list = (List<?>) obj;
+            if (list.size() > 1000) {
+                throw new IllegalArgumentException("data array exceeds maximum size");
+            }
+            for (Object item : list) {
+                validateDataDepth(item, depth + 1);
+            }
+        }
+        // Primitive types (String, Number, Boolean, null) are safe
     }
 
     private Map<String, Object> progressToMap(Progress p) {

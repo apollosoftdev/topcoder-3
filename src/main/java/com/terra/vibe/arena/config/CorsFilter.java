@@ -13,11 +13,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * CORS filter for handling cross-origin requests.
  * Allows authentication requests from Topcoder domains.
+ *
+ * Security: Uses strict origin validation to prevent CORS bypass attacks.
  */
 @Provider
 @PreMatching
@@ -26,14 +31,23 @@ public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilt
 
     private static final Logger logger = LoggerFactory.getLogger(CorsFilter.class);
 
-    // Allowed origins for CORS
+    // Explicitly allowed origins (exact match)
     private static final Set<String> ALLOWED_ORIGINS = Set.of(
             "https://accounts.topcoder.com",
             "https://accounts-auth0.topcoder.com",
             "https://accounts.topcoder-dev.com",
             "https://accounts-auth0.topcoder-dev.com",
             "https://www.topcoder.com",
-            "https://www.topcoder-dev.com"
+            "https://www.topcoder-dev.com",
+            "https://topcoder.com",
+            "https://topcoder-dev.com",
+            "https://local.topcoder-dev.com"
+    );
+
+    // Pattern for valid topcoder subdomain (strict validation)
+    // Only allows alphanumeric and hyphen in subdomain, must end with exact domain
+    private static final Pattern TOPCODER_SUBDOMAIN_PATTERN = Pattern.compile(
+            "^https://[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.topcoder(-dev)?\\.com$"
     );
 
     // Allowed headers
@@ -46,12 +60,33 @@ public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilt
     // Max age for preflight cache (24 hours)
     private static final String MAX_AGE = "86400";
 
+    // Check if running in development mode
+    private static final boolean IS_DEVELOPMENT = isDevelopmentMode();
+
+    private static boolean isDevelopmentMode() {
+        String env = System.getenv("NODE_ENV");
+        if (env == null) {
+            env = System.getProperty("node.env", "production");
+        }
+        return "development".equalsIgnoreCase(env) || "local".equalsIgnoreCase(env);
+    }
+
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
         // Handle preflight OPTIONS request
         if (requestContext.getMethod().equalsIgnoreCase("OPTIONS")) {
             String origin = getAllowedOrigin(requestContext);
             logger.debug("Handling CORS preflight request from origin: {}", origin);
+
+            // Return 403 for disallowed origins on preflight
+            if (origin == null) {
+                String requestedOrigin = requestContext.getHeaderString("Origin");
+                if (requestedOrigin != null && !requestedOrigin.isEmpty()) {
+                    logger.warn("CORS preflight rejected for origin: {}", requestedOrigin);
+                    requestContext.abortWith(Response.status(Response.Status.FORBIDDEN).build());
+                    return;
+                }
+            }
 
             Response.ResponseBuilder responseBuilder = Response.ok();
 
@@ -87,53 +122,100 @@ public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilt
 
     /**
      * Get the allowed origin for the request.
-     * Returns the request origin if it's in the allowed list,
-     * or allows localhost for development.
+     * Uses strict validation to prevent CORS bypass attacks.
      * Returns null if origin is not allowed (no CORS headers will be set).
      */
     private String getAllowedOrigin(ContainerRequestContext requestContext) {
         String origin = requestContext.getHeaderString("Origin");
 
-        // No origin header means same-origin request, allow it
+        // No origin header means same-origin request
         if (origin == null || origin.isEmpty()) {
             return null;
         }
 
-        // Check if origin is in allowed list
+        // Validate origin format first
+        if (!isValidOriginFormat(origin)) {
+            logger.warn("CORS: Invalid origin format: {}", sanitizeLogInput(origin));
+            return null;
+        }
+
+        // Check if origin is in explicit allowed list (exact match)
         if (ALLOWED_ORIGINS.contains(origin)) {
             return origin;
         }
 
-        // Allow any topcoder.com subdomain
-        if (origin.endsWith(".topcoder.com") || origin.endsWith(".topcoder-dev.com")) {
+        // Check if origin matches valid topcoder subdomain pattern
+        if (TOPCODER_SUBDOMAIN_PATTERN.matcher(origin).matches()) {
             return origin;
         }
 
-        // Allow localhost for development
-        if (isLocalhost(origin)) {
+        // Allow localhost ONLY in development mode
+        if (IS_DEVELOPMENT && isLocalhost(origin)) {
+            logger.debug("CORS: Allowing localhost origin in development mode: {}", origin);
             return origin;
         }
 
-        // Allow local.topcoder-dev.com for local development
-        if (origin.contains("local.topcoder-dev.com")) {
-            return origin;
-        }
-
-        logger.warn("CORS: Origin not allowed: {}", origin);
+        logger.warn("CORS: Origin not allowed: {}", sanitizeLogInput(origin));
         return null;
     }
 
     /**
-     * Check if origin is localhost (for development).
+     * Validate origin URL format to prevent injection attacks.
+     */
+    private boolean isValidOriginFormat(String origin) {
+        if (origin == null || origin.length() > 256) {
+            return false;
+        }
+
+        try {
+            URI uri = new URI(origin);
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+
+            // Must have valid scheme and host
+            if (scheme == null || host == null) {
+                return false;
+            }
+
+            // Only allow http/https schemes
+            if (!scheme.equals("http") && !scheme.equals("https")) {
+                return false;
+            }
+
+            // Host must not be empty and must not contain special characters
+            if (host.isEmpty() || host.contains("@") || host.contains(":")) {
+                return false;
+            }
+
+            return true;
+        } catch (URISyntaxException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if origin is localhost (only allowed in development).
+     * Uses strict pattern matching to prevent bypass attacks.
      */
     private boolean isLocalhost(String origin) {
         if (origin == null) {
             return false;
         }
 
-        return origin.startsWith("http://localhost") ||
-                origin.startsWith("https://localhost") ||
-                origin.startsWith("http://127.0.0.1") ||
-                origin.startsWith("https://127.0.0.1");
+        // Strict localhost patterns with optional port
+        return origin.matches("^https?://localhost(:\\d{1,5})?$") ||
+                origin.matches("^https?://127\\.0\\.0\\.1(:\\d{1,5})?$");
+    }
+
+    /**
+     * Sanitize input for logging to prevent log injection.
+     */
+    private String sanitizeLogInput(String input) {
+        if (input == null) {
+            return "null";
+        }
+        // Remove newlines and control characters, truncate long strings
+        return input.replaceAll("[\\r\\n\\t]", "")
+                .substring(0, Math.min(input.length(), 100));
     }
 }

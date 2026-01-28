@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 /**
  * REST API endpoints for score management and leaderboards.
@@ -30,6 +31,12 @@ public class ScoreResource {
 
     private final ScoreService scoreService = ScoreService.getInstance();
 
+    // Validation patterns to prevent injection and path traversal
+    private static final Pattern ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,100}$");
+    private static final Pattern HANDLE_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{1,50}$");
+    private static final double MAX_SCORE = 1_000_000_000;
+    private static final double MIN_SCORE = -1_000_000_000;
+
     /**
      * Submit a score.
      */
@@ -37,9 +44,14 @@ public class ScoreResource {
     @Path("/submit")
     public Response submitScore(Map<String, Object> request, @Context ContainerRequestContext ctx) {
         try {
-            String competitionId = (String) request.get("competitionId");
+            String competitionId = getStringParam(request, "competitionId");
             if (competitionId == null || competitionId.isEmpty()) {
                 return badRequest("competitionId is required");
+            }
+
+            // Validate competitionId format
+            if (!isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
             }
 
             Object scoreObj = request.get("score");
@@ -51,23 +63,40 @@ public class ScoreResource {
             if (scoreObj instanceof Number) {
                 scoreValue = ((Number) scoreObj).doubleValue();
             } else {
-                scoreValue = Double.parseDouble(scoreObj.toString());
+                try {
+                    scoreValue = Double.parseDouble(scoreObj.toString());
+                } catch (NumberFormatException e) {
+                    return badRequest("Invalid score value");
+                }
+            }
+
+            // Validate score range
+            if (Double.isNaN(scoreValue) || Double.isInfinite(scoreValue)) {
+                return badRequest("Invalid score value");
+            }
+            if (scoreValue < MIN_SCORE || scoreValue > MAX_SCORE) {
+                return badRequest("Score out of valid range");
             }
 
             // Get member info from token if authenticated
             TokenInfo tokenInfo = (TokenInfo) ctx.getProperty("tokenInfo");
-            String memberHandle = tokenInfo != null ? tokenInfo.getHandle() : (String) request.get("memberHandle");
-            String memberId = tokenInfo != null ? tokenInfo.getUserId() : (String) request.get("memberId");
+            String memberHandle = tokenInfo != null ? tokenInfo.getHandle() : getStringParam(request, "memberHandle");
+            String memberId = tokenInfo != null ? tokenInfo.getUserId() : getStringParam(request, "memberId");
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> metadata = (Map<String, Object>) request.get("metadata");
+            // Validate memberHandle if provided
+            if (memberHandle != null && !isValidHandle(memberHandle)) {
+                return badRequest("Invalid memberHandle format");
+            }
+
+            // Safely extract and validate metadata
+            Map<String, Object> metadata = extractAndValidateMetadata(request.get("metadata"));
 
             Score score = scoreService.submitScore(competitionId, memberHandle, memberId, scoreValue, metadata);
 
             return Response.ok(scoreToMap(score)).build();
 
-        } catch (NumberFormatException e) {
-            return badRequest("Invalid score value");
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
         } catch (Exception e) {
             logger.error("Error submitting score", e);
             return serverError("Failed to submit score");
@@ -83,6 +112,19 @@ public class ScoreResource {
                                    @QueryParam("limit") @DefaultValue("50") int limit,
                                    @QueryParam("offset") @DefaultValue("0") int offset) {
         try {
+            // Validate competitionId format
+            if (!isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
+            }
+
+            // Validate pagination parameters
+            if (limit < 1 || limit > 100) {
+                limit = 50;
+            }
+            if (offset < 0) {
+                offset = 0;
+            }
+
             List<LeaderboardEntry> entries = scoreService.getLeaderboard(competitionId, limit, offset);
 
             List<Map<String, Object>> leaderboard = entries.stream()
@@ -118,6 +160,11 @@ public class ScoreResource {
                         .build();
             }
 
+            // Validate competitionId if provided
+            if (competitionId != null && !competitionId.isEmpty() && !isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
+            }
+
             List<Score> scores = scoreService.getScoresByMember(tokenInfo.getHandle(), competitionId);
 
             List<Map<String, Object>> result = scores.stream()
@@ -140,6 +187,16 @@ public class ScoreResource {
     public Response getScoresByHandle(@PathParam("memberHandle") String memberHandle,
                                       @QueryParam("competitionId") String competitionId) {
         try {
+            // Validate memberHandle format
+            if (!isValidHandle(memberHandle)) {
+                return badRequest("Invalid memberHandle format");
+            }
+
+            // Validate competitionId if provided
+            if (competitionId != null && !competitionId.isEmpty() && !isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
+            }
+
             List<Score> scores = scoreService.getScoresByMember(memberHandle, competitionId);
 
             if (scores.isEmpty()) {
@@ -175,6 +232,11 @@ public class ScoreResource {
                         .build();
             }
 
+            // Validate competitionId format
+            if (!isValidId(competitionId)) {
+                return badRequest("Invalid competitionId format");
+            }
+
             Optional<RankInfo> rankInfo = scoreService.getMemberRank(competitionId, tokenInfo.getHandle());
 
             if (rankInfo.isEmpty()) {
@@ -196,6 +258,64 @@ public class ScoreResource {
             logger.error("Error getting rank", e);
             return serverError("Failed to get rank");
         }
+    }
+
+    /**
+     * Validate ID format to prevent path traversal and injection attacks.
+     */
+    private boolean isValidId(String id) {
+        return id != null && ID_PATTERN.matcher(id).matches();
+    }
+
+    /**
+     * Validate handle format.
+     */
+    private boolean isValidHandle(String handle) {
+        return handle != null && HANDLE_PATTERN.matcher(handle).matches();
+    }
+
+    /**
+     * Safely extract string parameter from request map.
+     */
+    private String getStringParam(Map<String, Object> request, String key) {
+        Object value = request.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        return value.toString();
+    }
+
+    /**
+     * Safely extract and validate metadata object from request.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractAndValidateMetadata(Object metadataObj) {
+        if (metadataObj == null) {
+            return null;
+        }
+
+        if (!(metadataObj instanceof Map)) {
+            throw new IllegalArgumentException("metadata must be an object");
+        }
+
+        Map<String, Object> metadata = (Map<String, Object>) metadataObj;
+
+        // Validate metadata size
+        if (metadata.size() > 50) {
+            throw new IllegalArgumentException("metadata has too many keys");
+        }
+
+        // Validate metadata keys
+        for (String key : metadata.keySet()) {
+            if (key == null || key.length() > 100) {
+                throw new IllegalArgumentException("Invalid metadata key");
+            }
+        }
+
+        return metadata;
     }
 
     private Map<String, Object> scoreToMap(Score s) {

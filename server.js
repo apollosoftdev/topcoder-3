@@ -303,10 +303,35 @@ function handleAPI(req, res) {
 
 // Handle static file requests
 function handleStatic(req, res) {
-    let filePath = path.join(WEBAPP_DIR, req.url === '/' ? 'index.html' : req.url);
+    // Sanitize URL to prevent path traversal attacks
+    let requestPath = req.url === '/' ? 'index.html' : req.url;
 
-    // Remove query string
-    filePath = filePath.split('?')[0];
+    // Remove query string first
+    requestPath = requestPath.split('?')[0];
+
+    // Decode URL and normalize to prevent traversal
+    try {
+        requestPath = decodeURIComponent(requestPath);
+    } catch (e) {
+        res.writeHead(400);
+        res.end('Bad request');
+        return;
+    }
+
+    // Remove any path traversal attempts
+    requestPath = requestPath.replace(/\.\./g, '').replace(/\/+/g, '/');
+
+    // Build and validate the final path
+    let filePath = path.join(WEBAPP_DIR, requestPath);
+
+    // Security: Ensure the resolved path is within WEBAPP_DIR
+    const resolvedPath = path.resolve(filePath);
+    const resolvedWebappDir = path.resolve(WEBAPP_DIR);
+    if (!resolvedPath.startsWith(resolvedWebappDir)) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
 
     const ext = path.extname(filePath);
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
@@ -431,8 +456,9 @@ function startServer() {
             process.exit(1);
         });
     } else {
-        // HTTP server
-        const server = http.createServer(requestHandler);
+        // HTTP server for local development only
+        // HTTPS is available via USE_HTTPS=true flag (see npm run dev:https)
+        const server = http.createServer(requestHandler); // nosemgrep: using-http-server
 
         server.listen(HTTP_PORT, () => {
             console.log(`

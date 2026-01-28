@@ -1,5 +1,6 @@
 package com.terra.vibe.arena.auth;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Priority;
 import jakarta.ws.rs.Priorities;
 import jakarta.ws.rs.container.ContainerRequestContext;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.Map;
 
 /**
  * JAX-RS filter for enforcing role-based access control.
@@ -25,6 +27,26 @@ import java.lang.reflect.Method;
 public class RoleAuthorizationFilter implements ContainerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(RoleAuthorizationFilter.class);
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper();
+
+    // Pre-serialized error responses for security and performance
+    private static final String UNAUTHORIZED_RESPONSE;
+    private static final String FORBIDDEN_RESPONSE;
+
+    static {
+        String unauthorized;
+        String forbidden;
+        try {
+            unauthorized = JSON_MAPPER.writeValueAsString(Map.of("error", "Authentication required"));
+            forbidden = JSON_MAPPER.writeValueAsString(Map.of("error", "Insufficient permissions"));
+        } catch (Exception e) {
+            // Fallback to safe hardcoded values
+            unauthorized = "{\"error\":\"Authentication required\"}";
+            forbidden = "{\"error\":\"Insufficient permissions\"}";
+        }
+        UNAUTHORIZED_RESPONSE = unauthorized;
+        FORBIDDEN_RESPONSE = forbidden;
+    }
 
     @Context
     private ResourceInfo resourceInfo;
@@ -78,7 +100,7 @@ public class RoleAuthorizationFilter implements ContainerRequestFilter {
     private void abortUnauthorized(ContainerRequestContext requestContext) {
         requestContext.abortWith(
                 Response.status(Response.Status.UNAUTHORIZED)
-                        .entity("{\"error\": \"Authentication required\"}")
+                        .entity(UNAUTHORIZED_RESPONSE)
                         .type("application/json")
                         .build()
         );
@@ -90,7 +112,7 @@ public class RoleAuthorizationFilter implements ContainerRequestFilter {
     private void abortForbidden(ContainerRequestContext requestContext) {
         requestContext.abortWith(
                 Response.status(Response.Status.FORBIDDEN)
-                        .entity("{\"error\": \"Insufficient permissions\"}")
+                        .entity(FORBIDDEN_RESPONSE)
                         .type("application/json")
                         .build()
         );
